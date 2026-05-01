@@ -438,7 +438,7 @@
     const serverMe = snap.players.find((p) => p.id === selfId);
     if (serverMe) {
       if (!serverMe.alive) {
-        // Mrtvi - vypni klient pohyb (server muze posunout pozici)
+        if (me.active) console.log("[ME] Vypnuto - server hlasi mrtvy");
         me.active = false;
       } else if (!me.active) {
         // Spawn nebo respawn - vezmi pozici ze serveru
@@ -450,8 +450,22 @@
         me.onGround = serverMe.onGround;
         me.facing = serverMe.facing;
         me.jumpsLeft = SHARED.PLAYER.MAX_JUMPS;
+        console.log("[ME] SPAWN/INIT - pozice:", me.x, me.y, "selfId:", selfId);
+      } else {
+        // Pojistka: pokud lokalni pozice je daleko od server pozice
+        // (napriklad jsme se rozesli), resyncuj
+        const dx = serverMe.x - me.x;
+        const dy = serverMe.y - me.y;
+        if (Math.abs(dx) > 500 || Math.abs(dy) > 500) {
+          console.log("[ME] RESYNC - byl jsem na", me.x, me.y, "ale server hlasi", serverMe.x, serverMe.y);
+          me.x = serverMe.x;
+          me.y = serverMe.y;
+          me.vx = 0;
+          me.vy = 0;
+        }
       }
     } else {
+      if (me.active) console.log("[ME] Vypnuto - serverMe je null");
       me.active = false;
     }
 
@@ -815,9 +829,19 @@
     if (me.active) {
       const selfRendered = state.players.find((p) => p.id === selfId);
       if (selfRendered && selfRendered.alive) {
-        selfRendered.x = me.x;
-        selfRendered.y = me.y;
-        selfRendered.facing = me.facing;
+        // Pojistka: pokud je me.x/y nevalidni, nepreposuvej (zustane server pozice)
+        if (isFinite(me.x) && isFinite(me.y) &&
+            me.x > -500 && me.x < SHARED.WORLD_WIDTH + 500 &&
+            me.y > -500 && me.y < SHARED.WORLD_HEIGHT + 500) {
+          selfRendered.x = me.x;
+          selfRendered.y = me.y;
+          selfRendered.facing = me.facing;
+        } else {
+          console.warn("[ME] Nevalidni lokalni pozice, pouzivam server:", me.x, me.y);
+          me.x = selfRendered.x;
+          me.y = selfRendered.y;
+          me.vx = 0; me.vy = 0;
+        }
       }
     }
 
