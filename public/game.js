@@ -12,6 +12,19 @@
   const SNAPSHOT_BUFFER_MS = 100;
   const snapshots = [];
 
+  // ---------- CLIENT-SIDE PREDICTION ----------
+  // Lokalni stav vlastni postavy - klient si pocita pohyb sam,
+  // server ho jen obcas opravi (reconciliation)
+  const localPlayer = {
+    x: 0, y: 0, vx: 0, vy: 0,
+    knockbackVx: 0, knockbackVy: 0,
+    onGround: false, jumpsLeft: 2,
+    facing: 1, lastJumpInput: false,
+    initialized: false,
+  };
+  // Posledni server snapshot vlastni postavy (na reconciliation)
+  let lastServerSelf = null;
+
   const screens = {
     menu: document.getElementById("menu"),
     lobby: document.getElementById("lobby"),
@@ -200,13 +213,17 @@
       shoot: input.shoot, aimX, aimY, switch: input.switch,
     });
     input.switch = null;
-  }, 1000 / 30);
+  }, 1000 / 60);
 
   // ---------- SNAPSHOTS / INTERPOLATION ----------
   socket.on("state", (snap) => {
     snap.recvAt = performance.now();
     snapshots.push(snap);
     while (snapshots.length > 120) snapshots.shift();
+
+    // Aktualizuj posledni serverove info o vlastni postave (na reconciliation)
+    const serverSelf = snap.players.find((p) => p.id === selfId);
+    if (serverSelf) lastServerSelf = serverSelf;
 
     if (screens.lobby.classList.contains("active")) {
       if (snap.phase !== "lobby") {
@@ -424,6 +441,154 @@
     particles.length = 0;
   }
 
+  // ---------- LOKALNI FYZIKA (prediction) ----------
+  // Stejna fyzika jako na serveru, jen pro vlastni postavu.
+  // Pohyb je okamzity - server ho potom opravi pokud je rozdil.
+  function updateLocalPhysics(dt) {
+    if (!SHARED || !lastServerSelf) return;
+
+    // Pokud server hlasi ze nezijeme, nepocitej fyziku
+    if (!lastServerSelf.alive) {
+      localPlayer.initialized = false;
+      return;
+    }
+
+    // Inicializace - zacni od posledni serverove pozice
+    if (!localPlayer.initialized) {
+      localPlayer.x = lastServerSelf.x;
+      localPlayer.y = lastServerSelf.y;
+      localPlayer.vx = lastServerSelf.vx;
+      localPlayer.vy = lastServerSelf.vy;
+      localPlayer.facing = lastServerSelf.facing;
+      localPlayer.onGround = lastServerSelf.onGround;
+      localPlayer.knockbackVx = 0;
+      localPlayer.knockbackVy = 0;
+      localPlayer.jumpsLeft = SHARED.PLAYER.MAX_JUMPS;
+      localPlayer.initialized = true;
+      return;
+    }
+
+    // Reconciliation - pokud server pozice se hodne lisi od lokalni,
+    // tak se k ni postupne posouvame (lerp), ne skokem
+    const serverDx = lastServerSelf.x - localPlayer.x;
+    const serverDy = lastServerSelf.y - localPlayer.y;
+    const dist = Math.hypot(serverDx, serverDy);
+    if (dist > 200) {
+      // Velky rozdil - skoc rovnou na server pozici (teleport, knockback)
+      localPlayer.x = lastServerSelf.x;
+      localPlayer.y = lastServerSelf.y;
+      localPlayer.vx = lastServerSelf.vx;
+      localPlayer.vy = lastServerSelf.vy;
+    } else if (dist > 30) {
+      // Mensi rozdil - postupne se priblizujeme
+      const t = 0.15;
+      localPlayer.x += serverDx * t;
+      localPlayer.y += serverDy * t;
+    }
+
+    // Aplikuj knockback ze serveru (rozdil rychlosti)
+    const serverVx = lastServerSelf.vx;
+    const serverVy = lastServerSelf.vy;
+    // Pokud server pohyb je rychlejsi nez ocekavame, je to knockback - pouzij ho
+    if (Math.abs(serverVx - localPlayer.vx) > 200) {
+      localPlayer.vx = serverVx;
+    }
+    if (Math.abs(serverVy - localPlayer.vy) > 200) {
+      localPlayer.vy = serverVy;
+    }
+
+    const PL = SHARED.PLAYER;
+    const inp = input;
+
+    // Horizontalni pohyb
+    const wantLeft = inp.left && !inp.right;
+    const wantRight = inp.right && !inp.left;
+    const targetVx = wantLeft ? -PL.MOVE_SPEED : wantRight ? PL.MOVE_SPEED : 0;
+    const accel = localPlayer.onGround ? PL.ACCEL_GROUND : PL.ACCEL_AIR;
+
+    if (targetVx !== 0) {
+      const diff = targetVx - localPlayer.vx;
+      const step = Math.sign(diff) * accel * dt;
+      if (Math.abs(step) > Math.abs(diff)) localPlayer.vx = targetVx;
+      else localPlayer.vx += step;
+      localPlayer.facing = wantLeft ? -1 : 1;
+    } else if (localPlayer.onGround) {
+      const fric = PL.FRICTION_GROUND * dt;
+      if (localPlayer.vx > fric) localPlayer.vx -= fric;
+      else if (localPlayer.vx < -fric) localPlayer.vx += fric;
+      else localPlayer.vx = 0;
+    }
+
+    // Skok
+    if (inp.jump && !localPlayer.lastJumpInput && localPlayer.jumpsLeft > 0) {
+      if (localPlayer.onGround || localPlayer.jumpsLeft === PL.MAX_JUMPS) {
+        localPlayer.vy = -PL.JUMP_VELOCITY;
+      } else {
+        localPlayer.vy = -PL.DOUBLE_JUMP_VELOCITY;
+      }
+      localPlayer.jumpsLeft--;
+      localPlayer.onGround = false;
+    }
+    localPlayer.lastJumpInput = inp.jump;
+
+    // Gravitace
+    localPlayer.vy += SHARED.GRAVITY * dt;
+    if (localPlayer.vy > SHARED.MAX_FALL_SPEED) localPlayer.vy = SHARED.MAX_FALL_SPEED;
+
+    // Pohyb + kolize s platformami
+    const dx = localPlayer.vx * dt;
+    const dy = localPlayer.vy * dt;
+    moveAndCollideLocal(dx, dy);
+
+    if (localPlayer.onGround) localPlayer.jumpsLeft = PL.MAX_JUMPS;
+  }
+
+  function moveAndCollideLocal(dx, dy) {
+    if (!snapshots.length) return;
+    const W = SHARED.PLAYER.WIDTH;
+    const H = SHARED.PLAYER.HEIGHT;
+    const map = SHARED.MAPS[snapshots[snapshots.length - 1].mapKey];
+    if (!map) return;
+    const livePlatforms = snapshots[snapshots.length - 1].platforms;
+    localPlayer.onGround = false;
+
+    // X osa
+    localPlayer.x += dx;
+    for (let i = 0; i < map.platforms.length; i++) {
+      const plat = map.platforms[i];
+      if (livePlatforms[i]?.destroyed) continue;
+      if (aabb(localPlayer.x, localPlayer.y, W, H, plat.x, plat.y, plat.w, plat.h)) {
+        if (dx > 0) localPlayer.x = plat.x - W;
+        else if (dx < 0) localPlayer.x = plat.x + plat.w;
+        localPlayer.vx = 0;
+      }
+    }
+
+    // Y osa
+    localPlayer.y += dy;
+    for (let i = 0; i < map.platforms.length; i++) {
+      const plat = map.platforms[i];
+      if (livePlatforms[i]?.destroyed) continue;
+      if (aabb(localPlayer.x, localPlayer.y, W, H, plat.x, plat.y, plat.w, plat.h)) {
+        if (dy > 0) {
+          localPlayer.y = plat.y - H;
+          localPlayer.onGround = true;
+          localPlayer.vy = 0;
+        } else if (dy < 0) {
+          localPlayer.y = plat.y + plat.h;
+          localPlayer.vy = 0;
+        }
+      }
+    }
+
+    if (localPlayer.x < -40) localPlayer.x = -40;
+    if (localPlayer.x > SHARED.WORLD_WIDTH - W + 40) localPlayer.x = SHARED.WORLD_WIDTH - W + 40;
+  }
+
+  function aabb(ax, ay, aw, ah, bx, by, bw, bh) {
+    return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
+  }
+
   // ---------- CAMERA + RENDER ----------
   function computeCamera() {
     const ww = SHARED.WORLD_WIDTH;
@@ -451,6 +616,19 @@
     if (!SHARED || !screens.game.classList.contains("active")) return;
     const state = getInterpolatedState();
     if (!state) return;
+
+    // Lokalni fyzika vlastni postavy (prediction)
+    updateLocalPhysics(dt);
+
+    // Prepis vlastni pozice v state na lokalni predikovanou
+    if (localPlayer.initialized && lastServerSelf?.alive) {
+      const selfInState = state.players.find((p) => p.id === selfId);
+      if (selfInState) {
+        selfInState.x = localPlayer.x;
+        selfInState.y = localPlayer.y;
+        selfInState.facing = localPlayer.facing;
+      }
+    }
 
     updateParticles(dt);
 
