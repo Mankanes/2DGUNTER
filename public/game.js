@@ -12,6 +12,20 @@
   const SNAPSHOT_BUFFER_MS = 100;
   const snapshots = [];
 
+  // ---------- KLIENT-AUTHORITATIVE POHYB ----------
+  // Klient si pocita svuj pohyb sam (zadne cekani na server).
+  // Server jen prijme pozici a rozesle ji ostatnim. Server stale
+  // resi damage a knockback, ale ten posila zpet jako event.
+  const me = {
+    active: false,
+    x: 0, y: 0,
+    vx: 0, vy: 0,
+    onGround: false,
+    jumpsLeft: 2,
+    facing: 1,
+    lastJumpInput: false,
+  };
+
   const screens = {
     menu: document.getElementById("menu"),
     lobby: document.getElementById("lobby"),
@@ -420,6 +434,27 @@
     snapshots.push(snap);
     while (snapshots.length > 120) snapshots.shift();
 
+    // Inicializace nebo reset lokalni pozice (klient-authoritative)
+    const serverMe = snap.players.find((p) => p.id === selfId);
+    if (serverMe) {
+      if (!serverMe.alive) {
+        // Mrtvi - vypni klient pohyb (server muze posunout pozici)
+        me.active = false;
+      } else if (!me.active) {
+        // Spawn nebo respawn - vezmi pozici ze serveru
+        me.active = true;
+        me.x = serverMe.x;
+        me.y = serverMe.y;
+        me.vx = 0;
+        me.vy = 0;
+        me.onGround = serverMe.onGround;
+        me.facing = serverMe.facing;
+        me.jumpsLeft = SHARED.PLAYER.MAX_JUMPS;
+      }
+    } else {
+      me.active = false;
+    }
+
     if (screens.lobby.classList.contains("active")) {
       if (snap.phase !== "lobby") {
         showScreen("game");
@@ -462,7 +497,12 @@
   function getInterpolatedSelf() {
     const s = getInterpolatedState();
     if (!s) return null;
-    return s.players.find((p) => p.id === selfId);
+    const self = s.players.find((p) => p.id === selfId);
+    // Vrat lokalni pozici ne tu ze serveru (kvuli aim z myší)
+    if (self && me.active) {
+      return { ...self, x: me.x, y: me.y };
+    }
+    return self;
   }
 
   function cloneSnapshot(s) {
@@ -506,6 +546,13 @@
       if (ev.type === "muzzle") {
         spawnMuzzle(ev.x, ev.y, ev.dx, ev.dy, ev.weapon);
         if (ev.shooterId === selfId) addShake(2);
+      } else if (ev.type === "knockback") {
+        // Server na nas aplikoval knockback (od strely, vybuchu, recoilu)
+        // Pridej tu rychlost na lokalni postavu
+        if (ev.targetId === selfId && me.active) {
+          me.vx += ev.vx;
+          me.vy += ev.vy;
+        }
       } else if (ev.type === "hit") {
         spawnHit(ev.x, ev.y, ev.weapon);
         if (ev.victimId === selfId) addShake(6);
@@ -636,6 +683,103 @@
     particles.length = 0;
   }
 
+  // ---------- LOKALNI FYZIKA (klient-authoritative) ----------
+  function updateMyPhysics(dt) {
+    if (!me.active || !SHARED || !snapshots.length) return;
+    const PL = SHARED.PLAYER;
+
+    // Pohyb podle inputu
+    const wantLeft = input.left && !input.right;
+    const wantRight = input.right && !input.left;
+    const targetVx = wantLeft ? -PL.MOVE_SPEED : wantRight ? PL.MOVE_SPEED : 0;
+    const accel = me.onGround ? PL.ACCEL_GROUND : PL.ACCEL_AIR;
+
+    if (targetVx !== 0) {
+      const diff = targetVx - me.vx;
+      const step = Math.sign(diff) * accel * dt;
+      if (Math.abs(step) > Math.abs(diff)) me.vx = targetVx;
+      else me.vx += step;
+      me.facing = wantLeft ? -1 : 1;
+    } else if (me.onGround) {
+      const fric = PL.FRICTION_GROUND * dt;
+      if (me.vx > fric) me.vx -= fric;
+      else if (me.vx < -fric) me.vx += fric;
+      else me.vx = 0;
+    }
+
+    // Skok (edge-triggered)
+    if (input.jump && !me.lastJumpInput && me.jumpsLeft > 0) {
+      if (me.onGround || me.jumpsLeft === PL.MAX_JUMPS) {
+        me.vy = -PL.JUMP_VELOCITY;
+      } else {
+        me.vy = -PL.DOUBLE_JUMP_VELOCITY;
+      }
+      me.jumpsLeft--;
+      me.onGround = false;
+    }
+    me.lastJumpInput = input.jump;
+
+    // Gravitace
+    me.vy += SHARED.GRAVITY * dt;
+    if (me.vy > SHARED.MAX_FALL_SPEED) me.vy = SHARED.MAX_FALL_SPEED;
+
+    // Kolize s platformami (z posledniho snapshotu)
+    const lastSnap = snapshots[snapshots.length - 1];
+    const map = SHARED.MAPS[lastSnap.mapKey];
+    if (!map) return;
+    const W = SHARED.PLAYER.WIDTH;
+    const H = SHARED.PLAYER.HEIGHT;
+
+    me.onGround = false;
+
+    // X osa
+    me.x += me.vx * dt;
+    for (let i = 0; i < map.platforms.length; i++) {
+      const plat = map.platforms[i];
+      if (lastSnap.platforms[i]?.destroyed) continue;
+      if (me.x < plat.x + plat.w && me.x + W > plat.x &&
+          me.y < plat.y + plat.h && me.y + H > plat.y) {
+        if (me.vx > 0) me.x = plat.x - W;
+        else if (me.vx < 0) me.x = plat.x + plat.w;
+        me.vx = 0;
+      }
+    }
+
+    // Y osa
+    me.y += me.vy * dt;
+    for (let i = 0; i < map.platforms.length; i++) {
+      const plat = map.platforms[i];
+      if (lastSnap.platforms[i]?.destroyed) continue;
+      if (me.x < plat.x + plat.w && me.x + W > plat.x &&
+          me.y < plat.y + plat.h && me.y + H > plat.y) {
+        if (me.vy > 0) {
+          me.y = plat.y - H;
+          me.onGround = true;
+          me.vy = 0;
+          me.jumpsLeft = PL.MAX_JUMPS;
+        } else if (me.vy < 0) {
+          me.y = plat.y + plat.h;
+          me.vy = 0;
+        }
+      }
+    }
+
+    // Hranice mapy
+    if (me.x < -40) me.x = -40;
+    if (me.x > SHARED.WORLD_WIDTH - W + 40) me.x = SHARED.WORLD_WIDTH - W + 40;
+  }
+
+  // Posilani pozice na server (30x za sekundu)
+  setInterval(() => {
+    if (!me.active || !socket.connected) return;
+    socket.emit("position", {
+      x: me.x, y: me.y,
+      vx: me.vx, vy: me.vy,
+      facing: me.facing,
+      onGround: me.onGround,
+    });
+  }, 1000 / 30);
+
   // ---------- CAMERA + RENDER ----------
   function computeCamera() {
     const ww = SHARED.WORLD_WIDTH;
@@ -663,6 +807,19 @@
     if (!SHARED || !screens.game.classList.contains("active")) return;
     const state = getInterpolatedState();
     if (!state) return;
+
+    // Lokalni fyzika vlastni postavy (klient-authoritative)
+    updateMyPhysics(dt);
+
+    // Pokud je lokalni pohyb aktivni, prepiseme vlastni pozici v render state
+    if (me.active) {
+      const selfRendered = state.players.find((p) => p.id === selfId);
+      if (selfRendered && selfRendered.alive) {
+        selfRendered.x = me.x;
+        selfRendered.y = me.y;
+        selfRendered.facing = me.facing;
+      }
+    }
 
     updateParticles(dt);
 
