@@ -1,0 +1,50 @@
+# Gun Mayhem Clone
+
+Multiplayer 2D plošinovka inspirovaná Gun Mayhem.
+
+## Struktura
+
+```
+gunmayhem/
+├── package.json
+├── server/
+│   └── index.js          ← celý backend (Express + Socket.io + herní logika + konstanty)
+└── public/
+    ├── index.html        ← stránka (menu, lobby, canvas)
+    ├── style.css         ← styly
+    └── game.js           ← celý frontend (input, render, particles, networking)
+```
+
+## Spuštění
+
+```bash
+npm install
+npm start
+```
+
+Otevři **http://localhost:3000** ve dvou nebo víc tabech.
+
+## Ovládání
+
+- **A / D** nebo šipky — pohyb
+- **W / Mezerník / šipka nahoru** — skok (double jump funguje)
+- **Myš** — míření
+- **Levé tlačítko** — střelba
+- **1 / 2 / 3 / 4** — pistole / brokovnice / raketomet / laser
+
+## Lobby
+
+1. Napiš si jméno
+2. **Quick Play** — automaticky tě hodí do otevřené místnosti
+3. **Create Room** — dostaneš 5-místný kód, pošleš ho kamarádovi
+4. **Join** — vlož kód od kamaráda
+
+Když všichni dají Ready, match začne. První kdo má 3 výhry kola vyhrává match.
+
+## Tuning
+
+Všechny herní hodnoty (gravitace, výška skoku, zbraně, layout map, knockback) jsou v `server/index.js` v objektu `SHARED` na začátku souboru. Změníš → restartuješ server → projeví se.
+
+## StackBlitz
+
+Vytvoř **Node.js** šablonu (ne Vite/React). Smaž defaultní `index.js` v rootu. Vytvoř strukturu `server/` a `public/` jak je nahoře, nakopíruj soubory. StackBlitz si automaticky pustí `npm install` a `npm start`.

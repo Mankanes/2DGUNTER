@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Gun Mayhem Clone</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+    <div id="menu" class="screen active">
+      <div class="logo">
+        <span class="logo-gun">🔫</span>
+        <span class="logo-text">GUN MAYHEM</span>
+      </div>
+
+      <div class="menu-card">
+        <label>Your name</label>
+        <input id="name-input" type="text" maxlength="16" placeholder="Player" />
+
+        <div class="menu-row">
+          <button id="btn-quickplay" class="btn primary">Quick Play</button>
+        </div>
+
+        <div class="divider"><span>or</span></div>
+
+        <div class="menu-row">
+          <button id="btn-create" class="btn">Create Room</button>
+        </div>
+
+        <div class="menu-row">
+          <input id="join-code" type="text" maxlength="5" placeholder="ROOM CODE" />
+          <button id="btn-join" class="btn">Join</button>
+        </div>
+
+        <div class="rooms-section">
+          <div class="section-title">
+            Open Rooms
+            <button id="btn-refresh" class="btn-small">Refresh</button>
+          </div>
+          <div id="rooms-list" class="rooms-list"></div>
+        </div>
+      </div>
+
+      <div class="menu-footer">
+        Move: <kbd>A</kbd> <kbd>D</kbd> &nbsp; Jump: <kbd>W</kbd> / <kbd>Space</kbd>
+        &nbsp; Aim/Shoot: <kbd>Mouse</kbd>
+        &nbsp; Switch weapons: <kbd>1-4</kbd>
+      </div>
+    </div>
+
+    <div id="lobby" class="screen">
+      <div class="lobby-card">
+        <div class="lobby-header">
+          <div>
+            <div class="label">ROOM CODE</div>
+            <div id="lobby-code" class="lobby-code">-----</div>
+          </div>
+          <div>
+            <div class="label">MAP</div>
+            <select id="lobby-map">
+              <option value="skybridge">Skybridge</option>
+              <option value="pillars">Pillars</option>
+              <option value="chasm">Chasm</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="section-title">Players</div>
+        <div id="lobby-players" class="lobby-players"></div>
+
+        <div class="lobby-actions">
+          <button id="btn-leave" class="btn">Leave</button>
+          <button id="btn-ready" class="btn primary">Ready</button>
+        </div>
+
+        <div class="lobby-hint">
+          First to <span id="lobby-win-score">3</span> round wins takes the match.
+          Last player standing wins each round.
+        </div>
+      </div>
+    </div>
+
+    <div id="game" class="screen">
+      <canvas id="canvas"></canvas>
+      <div id="hud" class="hud">
+        <div id="round-info" class="round-info"></div>
+        <div id="scoreboard" class="scoreboard"></div>
+        <div id="weapon-info" class="weapon-info"></div>
+        <div id="phase-banner" class="phase-banner"></div>
+        <div id="killfeed" class="killfeed"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
