@@ -442,24 +442,38 @@
         me.active = false;
       } else if (!me.active) {
         // Spawn nebo respawn - vezmi pozici ze serveru
+        const sx = Number(serverMe.x);
+        const sy = Number(serverMe.y);
+        if (!isFinite(sx) || !isFinite(sy)) {
+          console.warn("[ME] Server poslal nevalidni pozici:", serverMe.x, serverMe.y);
+          return;
+        }
         me.active = true;
-        me.x = serverMe.x;
-        me.y = serverMe.y;
+        me.x = sx;
+        me.y = sy;
         me.vx = 0;
         me.vy = 0;
-        me.onGround = serverMe.onGround;
-        me.facing = serverMe.facing;
+        me.onGround = !!serverMe.onGround;
+        me.facing = serverMe.facing || 1;
         me.jumpsLeft = SHARED.PLAYER.MAX_JUMPS;
         console.log("[ME] SPAWN/INIT - pozice:", me.x, me.y, "selfId:", selfId);
       } else {
         // Pojistka: pokud lokalni pozice je daleko od server pozice
         // (napriklad jsme se rozesli), resyncuj
-        const dx = serverMe.x - me.x;
-        const dy = serverMe.y - me.y;
-        if (Math.abs(dx) > 500 || Math.abs(dy) > 500) {
-          console.log("[ME] RESYNC - byl jsem na", me.x, me.y, "ale server hlasi", serverMe.x, serverMe.y);
-          me.x = serverMe.x;
-          me.y = serverMe.y;
+        const sx = Number(serverMe.x);
+        const sy = Number(serverMe.y);
+        if (!isFinite(sx) || !isFinite(sy)) {
+          // Server hlasi NaN - reset lokalni pozice na bezpecnou
+          console.warn("[ME] Server NaN pozice, reset");
+          me.active = false;
+          return;
+        }
+        const dx = sx - me.x;
+        const dy = sy - me.y;
+        if (!isFinite(me.x) || !isFinite(me.y) || Math.abs(dx) > 500 || Math.abs(dy) > 500) {
+          console.log("[ME] RESYNC - byl jsem na", me.x, me.y, "ale server hlasi", sx, sy);
+          me.x = sx;
+          me.y = sy;
           me.vx = 0;
           me.vy = 0;
         }
@@ -700,6 +714,15 @@
   // ---------- LOKALNI FYZIKA (klient-authoritative) ----------
   function updateMyPhysics(dt) {
     if (!me.active || !SHARED || !snapshots.length) return;
+    // Ochrana proti nevalidnim hodnotam
+    if (!isFinite(dt) || dt <= 0) return;
+    if (!isFinite(me.x) || !isFinite(me.y)) {
+      console.warn("[ME] Nevalidni stav, deaktivuju:", me);
+      me.active = false;
+      return;
+    }
+    if (!isFinite(me.vx)) me.vx = 0;
+    if (!isFinite(me.vy)) me.vy = 0;
     const PL = SHARED.PLAYER;
 
     // Pohyb podle inputu
@@ -786,6 +809,8 @@
   // Posilani pozice na server (30x za sekundu)
   setInterval(() => {
     if (!me.active || !socket.connected) return;
+    // Neposilej pokud mame nevalidni stav
+    if (!isFinite(me.x) || !isFinite(me.y) || !isFinite(me.vx) || !isFinite(me.vy)) return;
     socket.emit("position", {
       x: me.x, y: me.y,
       vx: me.vx, vy: me.vy,
@@ -829,7 +854,7 @@
     if (me.active) {
       const selfRendered = state.players.find((p) => p.id === selfId);
       if (selfRendered && selfRendered.alive) {
-        // Pojistka: pokud je me.x/y nevalidni, nepreposuvej (zustane server pozice)
+        // Pojistka: pokud je me.x/y nevalidni, pouzij server pozici
         if (isFinite(me.x) && isFinite(me.y) &&
             me.x > -500 && me.x < SHARED.WORLD_WIDTH + 500 &&
             me.y > -500 && me.y < SHARED.WORLD_HEIGHT + 500) {
@@ -837,10 +862,12 @@
           selfRendered.y = me.y;
           selfRendered.facing = me.facing;
         } else {
-          console.warn("[ME] Nevalidni lokalni pozice, pouzivam server:", me.x, me.y);
-          me.x = selfRendered.x;
-          me.y = selfRendered.y;
-          me.vx = 0; me.vy = 0;
+          // Nevalidni - resyncuj ze serveru, ale neloguj kazdy frame
+          if (isFinite(selfRendered.x) && isFinite(selfRendered.y)) {
+            me.x = selfRendered.x;
+            me.y = selfRendered.y;
+            me.vx = 0; me.vy = 0;
+          }
         }
       }
     }

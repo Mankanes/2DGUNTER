@@ -244,12 +244,17 @@ class Game {
   setPosition(socketId, pos) {
     const p = this.players.get(socketId);
     if (!p || !p.alive || p.isBot) return;
-    if (typeof pos.x !== "number" || typeof pos.y !== "number") return;
+    // Striktni kontrola - musi byt validni cisla, ne NaN ani Infinity
+    const x = Number(pos.x);
+    const y = Number(pos.y);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
     // Lehka anti-cheat: zustan v rozumnem rozsahu mapy
-    p.x = clamp(pos.x, -100, SHARED.WORLD_WIDTH + 100);
-    p.y = clamp(pos.y, -200, SHARED.PLAYER.DEATH_Y + 200);
-    p.vx = clamp(Number(pos.vx) || 0, -2000, 2000);
-    p.vy = clamp(Number(pos.vy) || 0, -2000, 2000);
+    p.x = clamp(x, -100, SHARED.WORLD_WIDTH + 100);
+    p.y = clamp(y, -200, SHARED.PLAYER.DEATH_Y + 200);
+    const vx = Number(pos.vx);
+    const vy = Number(pos.vy);
+    p.vx = Number.isFinite(vx) ? clamp(vx, -2000, 2000) : 0;
+    p.vy = Number.isFinite(vy) ? clamp(vy, -2000, 2000) : 0;
     p.facing = pos.facing >= 0 ? 1 : -1;
     p.onGround = !!pos.onGround;
     // Pad mimo mapu = smrt (server stale resi smrt)
