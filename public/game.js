@@ -12,6 +12,21 @@
   const SNAPSHOT_BUFFER_MS = 100;
   const snapshots = [];
 
+  // ---------- CLIENT-SIDE PREDICTION ----------
+  // Lokalni stav vlastni postavy. Prediction = klient si pocita pohyb sam,
+  // server pak posle skutecnou pozici a my se k ni hladce dorovname.
+  // Vychozi stav: vypnute, dokud server poprve nepotvrdi ze zijeme.
+  const predicted = {
+    active: false,    // jestli je prediction aktivni
+    x: 0, y: 0,
+    vx: 0, vy: 0,
+    onGround: false,
+    jumpsLeft: 2,
+    facing: 1,
+    lastJumpInput: false,
+  };
+  let serverSelf = null; // posledni snapshot vlastni postavy ze serveru
+
   const screens = {
     menu: document.getElementById("menu"),
     lobby: document.getElementById("lobby"),
@@ -420,6 +435,29 @@
     snapshots.push(snap);
     while (snapshots.length > 120) snapshots.shift();
 
+    // Sleduj server pozici vlastni postavy pro prediction reconciliation
+    const me = snap.players.find((p) => p.id === selfId);
+    if (me) {
+      serverSelf = me;
+      if (!me.alive) {
+        // Mrtvy = vypni prediction (priste se znovu inicializuje pri spawnu)
+        predicted.active = false;
+      } else if (!predicted.active) {
+        // Spawn nebo respawn - inicializuj prediction ze server pozice
+        predicted.active = true;
+        predicted.x = me.x;
+        predicted.y = me.y;
+        predicted.vx = me.vx;
+        predicted.vy = me.vy;
+        predicted.onGround = me.onGround;
+        predicted.jumpsLeft = SHARED.PLAYER.MAX_JUMPS;
+        predicted.facing = me.facing;
+      }
+    } else {
+      serverSelf = null;
+      predicted.active = false;
+    }
+
     if (screens.lobby.classList.contains("active")) {
       if (snap.phase !== "lobby") {
         showScreen("game");
@@ -462,7 +500,13 @@
   function getInterpolatedSelf() {
     const s = getInterpolatedState();
     if (!s) return null;
-    return s.players.find((p) => p.id === selfId);
+    const self = s.players.find((p) => p.id === selfId);
+    // Pokud je prediction aktivni, vrat predikovanou pozici
+    // (aby aim z myší bral aktualni pozici, ne 100ms zpozdenou)
+    if (self && predicted.active) {
+      return { ...self, x: predicted.x, y: predicted.y };
+    }
+    return self;
   }
 
   function cloneSnapshot(s) {
@@ -636,6 +680,123 @@
     particles.length = 0;
   }
 
+  // ---------- PREDICTION (lokalni fyzika vlastni postavy) ----------
+  // Stejna logika jako na serveru, ale jen pro nas.
+  // Knockback, damage, smrt - to vsechno nadale dela server. My jen
+  // pohybujeme postavou aby reakce na klavesy byla okamzita.
+  function updatePrediction(dt) {
+    if (!predicted.active || !SHARED || !snapshots.length) return;
+    if (!serverSelf || !serverSelf.alive) {
+      predicted.active = false;
+      return;
+    }
+
+    // Reconciliation: dorovnani k serverove pozici
+    const dxToServer = serverSelf.x - predicted.x;
+    const dyToServer = serverSelf.y - predicted.y;
+    const distToServer = Math.hypot(dxToServer, dyToServer);
+
+    if (distToServer > 250) {
+      // Velky rozdil = teleport (knockback, respawn, korekce)
+      predicted.x = serverSelf.x;
+      predicted.y = serverSelf.y;
+      predicted.vx = serverSelf.vx;
+      predicted.vy = serverSelf.vy;
+    } else if (distToServer > 8) {
+      // Mensi rozdil = postupne dorovnani (lerp), aby nebylo skubani
+      predicted.x += dxToServer * Math.min(1, dt * 8);
+      predicted.y += dyToServer * Math.min(1, dt * 8);
+    }
+
+    // Pokud server hlasi vyrazne odlisnou rychlost (knockback od strely),
+    // prevezmi ji
+    const vxDiff = serverSelf.vx - predicted.vx;
+    const vyDiff = serverSelf.vy - predicted.vy;
+    if (Math.abs(vxDiff) > 250) predicted.vx = serverSelf.vx;
+    if (Math.abs(vyDiff) > 250) predicted.vy = serverSelf.vy;
+
+    // Aplikuj hracovy input
+    const PL = SHARED.PLAYER;
+    const wantLeft = input.left && !input.right;
+    const wantRight = input.right && !input.left;
+    const targetVx = wantLeft ? -PL.MOVE_SPEED : wantRight ? PL.MOVE_SPEED : 0;
+    const accel = predicted.onGround ? PL.ACCEL_GROUND : PL.ACCEL_AIR;
+
+    if (targetVx !== 0) {
+      const diff = targetVx - predicted.vx;
+      const step = Math.sign(diff) * accel * dt;
+      if (Math.abs(step) > Math.abs(diff)) predicted.vx = targetVx;
+      else predicted.vx += step;
+      predicted.facing = wantLeft ? -1 : 1;
+    } else if (predicted.onGround) {
+      const fric = PL.FRICTION_GROUND * dt;
+      if (predicted.vx > fric) predicted.vx -= fric;
+      else if (predicted.vx < -fric) predicted.vx += fric;
+      else predicted.vx = 0;
+    }
+
+    // Skok (edge-triggered)
+    if (input.jump && !predicted.lastJumpInput && predicted.jumpsLeft > 0) {
+      if (predicted.onGround || predicted.jumpsLeft === PL.MAX_JUMPS) {
+        predicted.vy = -PL.JUMP_VELOCITY;
+      } else {
+        predicted.vy = -PL.DOUBLE_JUMP_VELOCITY;
+      }
+      predicted.jumpsLeft--;
+      predicted.onGround = false;
+    }
+    predicted.lastJumpInput = input.jump;
+
+    // Gravitace
+    predicted.vy += SHARED.GRAVITY * dt;
+    if (predicted.vy > SHARED.MAX_FALL_SPEED) predicted.vy = SHARED.MAX_FALL_SPEED;
+
+    // Kolize s platformami (z posledniho snapshotu)
+    const lastSnap = snapshots[snapshots.length - 1];
+    const map = SHARED.MAPS[lastSnap.mapKey];
+    if (!map) return;
+    const W = SHARED.PLAYER.WIDTH;
+    const H = SHARED.PLAYER.HEIGHT;
+
+    predicted.onGround = false;
+
+    // X osa
+    predicted.x += predicted.vx * dt;
+    for (let i = 0; i < map.platforms.length; i++) {
+      const plat = map.platforms[i];
+      if (lastSnap.platforms[i]?.destroyed) continue;
+      if (predicted.x < plat.x + plat.w && predicted.x + W > plat.x &&
+          predicted.y < plat.y + plat.h && predicted.y + H > plat.y) {
+        if (predicted.vx > 0) predicted.x = plat.x - W;
+        else if (predicted.vx < 0) predicted.x = plat.x + plat.w;
+        predicted.vx = 0;
+      }
+    }
+
+    // Y osa
+    predicted.y += predicted.vy * dt;
+    for (let i = 0; i < map.platforms.length; i++) {
+      const plat = map.platforms[i];
+      if (lastSnap.platforms[i]?.destroyed) continue;
+      if (predicted.x < plat.x + plat.w && predicted.x + W > plat.x &&
+          predicted.y < plat.y + plat.h && predicted.y + H > plat.y) {
+        if (predicted.vy > 0) {
+          predicted.y = plat.y - H;
+          predicted.onGround = true;
+          predicted.vy = 0;
+          predicted.jumpsLeft = PL.MAX_JUMPS;
+        } else if (predicted.vy < 0) {
+          predicted.y = plat.y + plat.h;
+          predicted.vy = 0;
+        }
+      }
+    }
+
+    // Hranice mapy
+    if (predicted.x < -40) predicted.x = -40;
+    if (predicted.x > SHARED.WORLD_WIDTH - W + 40) predicted.x = SHARED.WORLD_WIDTH - W + 40;
+  }
+
   // ---------- CAMERA + RENDER ----------
   function computeCamera() {
     const ww = SHARED.WORLD_WIDTH;
@@ -663,6 +824,20 @@
     if (!SHARED || !screens.game.classList.contains("active")) return;
     const state = getInterpolatedState();
     if (!state) return;
+
+    // Prediction: lokalne posuneme vlastni postavu okamzite
+    updatePrediction(dt);
+
+    // Pokud je prediction aktivni, prepiseme vlastni pozici v rendered state
+    // (server pozice je interpolovana ze snapshotu - byla by 100ms zpozdena)
+    if (predicted.active) {
+      const selfRendered = state.players.find((p) => p.id === selfId);
+      if (selfRendered && selfRendered.alive) {
+        selfRendered.x = predicted.x;
+        selfRendered.y = predicted.y;
+        selfRendered.facing = predicted.facing;
+      }
+    }
 
     updateParticles(dt);
 
