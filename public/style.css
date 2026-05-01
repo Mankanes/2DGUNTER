@@ -481,3 +481,76 @@ kbd {
   font-size: 14px;
   outline: none;
 }
+
+/* ======================= KONZOLE (CS-like) ======================= */
+.console {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 50%;
+  background: rgba(10, 14, 26, 0.95);
+  border-bottom: 2px solid #2a3a5a;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.7);
+  display: none;
+  flex-direction: column;
+  z-index: 9999;
+  font-family: "Consolas", "Monaco", monospace;
+}
+.console.active { display: flex; }
+.console-header {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 12px;
+  background: #1a2240;
+  font-size: 12px;
+  letter-spacing: 2px;
+  font-weight: 700;
+  color: #94a3c4;
+  border-bottom: 1px solid #2a3a5a;
+}
+.console-hint {
+  color: #5a6a90;
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 1px;
+}
+.console-log {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #c8d4e8;
+}
+.console-line {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.console-line.cmd { color: #ffe66d; }
+.console-line.ok { color: #4ade80; }
+.console-line.error { color: #ef4444; }
+.console-line.info { color: #94a3c4; }
+.console-input-row {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  background: #0e1424;
+  border-top: 1px solid #2a3a5a;
+  gap: 8px;
+}
+.console-prompt {
+  color: #54e0ff;
+  font-weight: 700;
+  font-size: 16px;
+}
+#console-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #fff;
+  font-family: inherit;
+  font-size: 14px;
+}
+#console-input::placeholder { color: #5a6a90; }

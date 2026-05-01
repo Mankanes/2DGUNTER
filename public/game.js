@@ -135,6 +135,100 @@
     }
   });
 
+  // ---------- KONZOLE (jako CS) ----------
+  const consoleEl = document.getElementById("console");
+  const consoleLog = document.getElementById("console-log");
+  const consoleInput = document.getElementById("console-input");
+  let isConsoleOpen = false;
+  const consoleHistory = [];
+  let consoleHistoryIdx = -1;
+
+  function openConsole() {
+    isConsoleOpen = true;
+    consoleEl.classList.add("active");
+    consoleInput.value = "";
+    consoleInput.focus();
+    // Vypni hru
+    input.left = false; input.right = false;
+    input.jump = false; input.shoot = false;
+    consoleHistoryIdx = -1;
+    // Pri prvnim otevreni vypis hint
+    if (!consoleLog.children.length) {
+      appendConsoleLine("Console opened. Type 'help' for commands.", "info");
+    }
+  }
+
+  function closeConsole() {
+    isConsoleOpen = false;
+    consoleEl.classList.remove("active");
+    consoleInput.blur();
+  }
+
+  function appendConsoleLine(text, type) {
+    const line = document.createElement("div");
+    line.className = "console-line " + (type || "");
+    line.textContent = text;
+    consoleLog.appendChild(line);
+    consoleLog.scrollTop = consoleLog.scrollHeight;
+    while (consoleLog.children.length > 200) {
+      consoleLog.removeChild(consoleLog.firstChild);
+    }
+  }
+
+  function executeConsoleCommand(cmd) {
+    cmd = cmd.trim();
+    if (!cmd) return;
+    consoleHistory.push(cmd);
+    if (consoleHistory.length > 50) consoleHistory.shift();
+    appendConsoleLine("> " + cmd, "cmd");
+
+    // Klientske prikazy
+    if (cmd === "clear") {
+      consoleLog.innerHTML = "";
+      return;
+    }
+    if (cmd === "close" || cmd === "quit") {
+      closeConsole();
+      return;
+    }
+
+    // Vsechno ostatni posli na server
+    socket.emit("console", { cmd });
+  }
+
+  consoleInput.addEventListener("keydown", (e) => {
+    e.stopPropagation();
+    if (e.key === "Enter") {
+      executeConsoleCommand(consoleInput.value);
+      consoleInput.value = "";
+      consoleHistoryIdx = -1;
+    } else if (e.key === "Escape" || e.key === "`" || e.key === "~") {
+      closeConsole();
+      e.preventDefault();
+    } else if (e.key === "ArrowUp") {
+      if (consoleHistory.length === 0) return;
+      if (consoleHistoryIdx === -1) consoleHistoryIdx = consoleHistory.length - 1;
+      else if (consoleHistoryIdx > 0) consoleHistoryIdx--;
+      consoleInput.value = consoleHistory[consoleHistoryIdx] || "";
+      e.preventDefault();
+    } else if (e.key === "ArrowDown") {
+      if (consoleHistoryIdx === -1) return;
+      if (consoleHistoryIdx < consoleHistory.length - 1) {
+        consoleHistoryIdx++;
+        consoleInput.value = consoleHistory[consoleHistoryIdx];
+      } else {
+        consoleHistoryIdx = -1;
+        consoleInput.value = "";
+      }
+      e.preventDefault();
+    }
+  });
+  consoleInput.addEventListener("keyup", (e) => e.stopPropagation());
+
+  socket.on("console", (msg) => {
+    appendConsoleLine(msg.text, msg.type || "info");
+  });
+
   // ---------- CHAT ----------
   const lobbyChatLog = document.getElementById("lobby-chat-log");
   const lobbyChatInput = document.getElementById("lobby-chat-input");
@@ -247,8 +341,15 @@
   };
 
   document.addEventListener("keydown", (e) => {
-    // Pokud je chat otevreny, klavesy nezpracovavej (chat input je sam zvladne)
-    if (isChatOpen) return;
+    // Pokud je konzole nebo chat otevreny, klavesy nezpracovavej
+    if (isConsoleOpen || isChatOpen) return;
+
+    // ~ nebo ` otevre konzoli (kdykoliv - v menu, lobby, hre)
+    if (e.key === "`" || e.key === "~") {
+      openConsole();
+      e.preventDefault();
+      return;
+    }
 
     // Enter otevre in-game chat (jen kdyz jsme ve hre)
     if (e.key === "Enter" && screens.game.classList.contains("active")) {
@@ -268,7 +369,7 @@
     else if (k === "4") input.switch = "laser";
   });
   document.addEventListener("keyup", (e) => {
-    if (isChatOpen) return;
+    if (isConsoleOpen || isChatOpen) return;
     const k = e.key.toLowerCase();
     if (keyMap[k]) {
       input[keyMap[k]] = false;

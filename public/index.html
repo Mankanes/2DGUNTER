@@ -108,6 +108,19 @@
     </div>
   </div>
 
+  <!-- Konzole - dostupna i v lobby i ve hre -->
+  <div id="console" class="console">
+    <div class="console-header">
+      <span>CONSOLE</span>
+      <span class="console-hint">~ to close · type 'help'</span>
+    </div>
+    <div id="console-log" class="console-log"></div>
+    <div class="console-input-row">
+      <span class="console-prompt">&gt;</span>
+      <input id="console-input" type="text" maxlength="200" placeholder="type a command..." autocomplete="off" />
+    </div>
+  </div>
+
   <script src="/socket.io/socket.io.js"></script>
   <script src="game.js"></script>
 </body>

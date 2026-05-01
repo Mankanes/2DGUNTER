@@ -189,7 +189,7 @@ class Game {
     }));
   }
 
-  addPlayer(socketId, name) {
+  addPlayer(socketId, name, isBot = false) {
     if (this.players.size >= SHARED.ROUND.MAX_PLAYERS) return null;
     const colorIndex = this.players.size;
     const player = {
@@ -206,7 +206,9 @@ class Game {
       input: { left: false, right: false, jump: false, shoot: false, aimX: 0, aimY: 0, switch: null },
       lastJumpInput: false,
       score: 0, kills: 0, deaths: 0,
-      ready: false,
+      ready: !!isBot, // boti jsou vzdy ready
+      isBot,
+      botMove: false, // jestli se bot ma hybat
       shotCountWindow: [],
     };
     this.players.set(socketId, player);
@@ -360,6 +362,30 @@ class Game {
   }
 
   simulatePlayers(dt, allowShoot) {
+    // Bot AI: jednoducha logika - bud stoji, nebo se pohybuje nahodne
+    for (const p of this.players.values()) {
+      if (!p.isBot || !p.alive) continue;
+      if (!p.botMove) {
+        // Stoji - vsechny inputy false
+        p.input.left = false;
+        p.input.right = false;
+        p.input.jump = false;
+        p.input.shoot = false;
+        continue;
+      }
+      // Nahodny wandering
+      if (!p._botTimer || p._botTimer <= 0) {
+        p._botDir = Math.random() < 0.33 ? -1 : Math.random() < 0.5 ? 0 : 1;
+        p._botJump = Math.random() < 0.3;
+        p._botTimer = 0.5 + Math.random() * 1.5;
+      }
+      p._botTimer -= dt;
+      p.input.left = p._botDir === -1;
+      p.input.right = p._botDir === 1;
+      p.input.jump = p._botJump && Math.random() < 0.05;
+      p.input.shoot = false;
+    }
+
     for (const p of this.players.values()) {
       if (!p.alive) {
         if (this.phase === "playing" && p.respawnAt > 0) {
@@ -897,6 +923,137 @@ io.on("connection", (socket) => {
     room.game.tryStartMatch();
   });
 
+  // Konzolove prikazy (jako CS)
+  let nextBotIdNum = 1;
+  socket.on("console", (data) => {
+    const roomId = socketRoom.get(socket.id);
+    const room = rooms.get(roomId);
+    if (!room) return sendConsole(socket, "Nejsi v mistnosti", "error");
+    const cmd = (data?.cmd || "").toString().trim();
+    if (!cmd) return;
+
+    const parts = cmd.split(/\s+/);
+    const main = parts[0].toLowerCase();
+    const args = parts.slice(1);
+
+    try {
+      if (main === "help") {
+        sendConsole(socket, "Prikazy:", "info");
+        sendConsole(socket, "  bot add [jmeno]  - prida bota", "info");
+        sendConsole(socket, "  bot remove       - odebere posledniho bota", "info");
+        sendConsole(socket, "  bot clear        - odebere vsechny boty", "info");
+        sendConsole(socket, "  bot move on/off  - boti se hybou nebo stoji", "info");
+        sendConsole(socket, "  kill             - zabij sam sebe", "info");
+        sendConsole(socket, "  give <weapon>    - daruj si zbran (pistol/shotgun/rocket/laser)", "info");
+        sendConsole(socket, "  map <name>       - zmen mapu (jen v lobby)", "info");
+        sendConsole(socket, "  start            - spusti zapas (i bez ready check)", "info");
+        sendConsole(socket, "  list             - vypis hracu", "info");
+      }
+      else if (main === "bot" && args[0] === "add") {
+        if (room.game.players.size >= SHARED.ROUND.MAX_PLAYERS) {
+          return sendConsole(socket, "Mistnost je plna (max " + SHARED.ROUND.MAX_PLAYERS + ")", "error");
+        }
+        const botName = args[1] || ("Bot" + (nextBotIdNum++));
+        const botId = "bot_" + Math.random().toString(36).slice(2, 9);
+        const bot = room.game.addPlayer(botId, botName, true);
+        if (bot) {
+          // Pokud uz hra bezi, hned bota spawni
+          if (room.game.phase !== "lobby") {
+            const spawns = room.game.map.spawns;
+            const s = spawns[Math.floor(Math.random() * spawns.length)];
+            bot.x = s.x; bot.y = s.y;
+            bot.alive = true;
+            bot.hp = SHARED.PLAYER.MAX_HEALTH;
+          }
+          io.to(roomId).emit("room_info", roomInfo(room));
+          sendConsole(socket, `Pridan bot: ${botName}`, "ok");
+        } else {
+          sendConsole(socket, "Nepodarilo se pridat bota", "error");
+        }
+      }
+      else if (main === "bot" && args[0] === "remove") {
+        const bots = [...room.game.players.values()].filter(p => p.isBot);
+        if (!bots.length) return sendConsole(socket, "Zadny bot neni v mistnosti", "error");
+        const last = bots[bots.length - 1];
+        room.game.removePlayer(last.id);
+        io.to(roomId).emit("room_info", roomInfo(room));
+        sendConsole(socket, `Odebran bot: ${last.name}`, "ok");
+      }
+      else if (main === "bot" && args[0] === "clear") {
+        const bots = [...room.game.players.values()].filter(p => p.isBot);
+        for (const b of bots) room.game.removePlayer(b.id);
+        io.to(roomId).emit("room_info", roomInfo(room));
+        sendConsole(socket, `Odebrano ${bots.length} botu`, "ok");
+      }
+      else if (main === "bot" && args[0] === "move") {
+        const enable = args[1] === "on";
+        for (const p of room.game.players.values()) {
+          if (p.isBot) p.botMove = enable;
+        }
+        sendConsole(socket, `Bot pohyb: ${enable ? "ON" : "OFF"}`, "ok");
+      }
+      else if (main === "kill") {
+        const me = room.game.players.get(socket.id);
+        if (me && me.alive) {
+          room.game.killPlayer(me, null, "console");
+          sendConsole(socket, "Sebevrazda", "ok");
+        } else {
+          sendConsole(socket, "Nezijes", "error");
+        }
+      }
+      else if (main === "give") {
+        const wep = args[0]?.toLowerCase();
+        if (!wep || !SHARED.WEAPONS[wep]) {
+          return sendConsole(socket, "Pouziti: give pistol|shotgun|rocket|laser", "error");
+        }
+        const me = room.game.players.get(socket.id);
+        if (!me || !me.alive) return sendConsole(socket, "Nezijes", "error");
+        me.weapon = wep;
+        me.ammo = SHARED.WEAPONS[wep].ammo;
+        sendConsole(socket, `Mas: ${SHARED.WEAPONS[wep].name}`, "ok");
+      }
+      else if (main === "map") {
+        if (room.game.phase !== "lobby") {
+          return sendConsole(socket, "Mapu lze zmenit jen v lobby", "error");
+        }
+        const mapKey = args[0]?.toLowerCase();
+        if (!SHARED.MAPS[mapKey]) {
+          return sendConsole(socket, "Mapy: " + Object.keys(SHARED.MAPS).join(", "), "error");
+        }
+        room.game.loadMap(mapKey);
+        io.to(roomId).emit("room_info", roomInfo(room));
+        sendConsole(socket, `Mapa zmenena na: ${mapKey}`, "ok");
+      }
+      else if (main === "start") {
+        if (room.game.phase !== "lobby") {
+          return sendConsole(socket, "Zapas uz bezi", "error");
+        }
+        if (room.game.players.size < SHARED.ROUND.MIN_PLAYERS) {
+          return sendConsole(socket, `Potreba alespon ${SHARED.ROUND.MIN_PLAYERS} hracu (vc botu)`, "error");
+        }
+        // Forcni vsechny ready a spust
+        for (const p of room.game.players.values()) p.ready = true;
+        room.game.startMatch();
+        sendConsole(socket, "Zapas spusten!", "ok");
+      }
+      else if (main === "list") {
+        sendConsole(socket, `Hraci v mistnosti (${room.game.players.size}):`, "info");
+        for (const p of room.game.players.values()) {
+          sendConsole(socket, `  ${p.isBot ? "[BOT]" : "     "} ${p.name} (hp:${Math.round(p.hp)} ${p.alive ? "alive" : "dead"})`, "info");
+        }
+      }
+      else {
+        sendConsole(socket, `Neznamy prikaz: ${main}. Napis 'help'`, "error");
+      }
+    } catch (e) {
+      sendConsole(socket, "Chyba: " + e.message, "error");
+    }
+  });
+
+  function sendConsole(s, text, type) {
+    s.emit("console", { text, type: type || "info" });
+  }
+
   socket.on("input", (data) => {
     const roomId = socketRoom.get(socket.id);
     const room = rooms.get(roomId);
@@ -990,6 +1147,15 @@ function leaveRoom(socket) {
   const room = rooms.get(roomId);
   if (room) {
     room.game.removePlayer(socket.id);
+
+    // Pokud zustali jen boti, smaz cely room
+    const realPlayers = [...room.game.players.values()].filter(p => !p.isBot);
+    if (realPlayers.length === 0) {
+      for (const p of [...room.game.players.values()]) {
+        room.game.removePlayer(p.id);
+      }
+    }
+
     io.to(roomId).emit("room_info", roomInfo(room));
     if (room.game.players.size === 0) {
       removeEmptyRoom(roomId);
