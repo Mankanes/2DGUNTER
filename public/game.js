@@ -85,6 +85,7 @@
     roomId = resp.roomId;
     selfId = resp.selfId;
     SHARED = resp.shared;
+    clearChatLogs();
     document.getElementById("lobby-code").textContent = roomId;
     document.getElementById("lobby-map").value = resp.mapKey;
     document.getElementById("lobby-win-score").textContent = SHARED.ROUND.MATCH_WIN_SCORE;
@@ -103,6 +104,7 @@
   document.getElementById("btn-leave").onclick = () => {
     socket.emit("leave_room");
     isReady = false;
+    clearChatLogs();
     showScreen("menu");
     refreshRooms();
   };
@@ -133,6 +135,104 @@
     }
   });
 
+  // ---------- CHAT ----------
+  const lobbyChatLog = document.getElementById("lobby-chat-log");
+  const lobbyChatInput = document.getElementById("lobby-chat-input");
+  const lobbyChatSend = document.getElementById("lobby-chat-send");
+  const gameChatLog = document.getElementById("game-chat-log");
+  const gameChatInputWrap = document.getElementById("game-chat-input-wrap");
+  const gameChatInput = document.getElementById("game-chat-input");
+
+  let isChatOpen = false; // true = in-game chat input je aktivni, klavesy jdou do chatu
+
+  function sendChatMessage(text) {
+    text = (text || "").trim();
+    if (!text) return;
+    socket.emit("chat", { text });
+  }
+
+  function openGameChat() {
+    isChatOpen = true;
+    gameChatInputWrap.classList.add("active");
+    gameChatInput.value = "";
+    gameChatInput.focus();
+    // Vypni vsechny inputy ve hre, ax neumre nahodou
+    input.left = false; input.right = false;
+    input.jump = false; input.shoot = false;
+  }
+
+  function closeGameChat() {
+    isChatOpen = false;
+    gameChatInputWrap.classList.remove("active");
+    gameChatInput.blur();
+  }
+
+  // Lobby chat - posilani
+  lobbyChatSend.onclick = () => {
+    sendChatMessage(lobbyChatInput.value);
+    lobbyChatInput.value = "";
+  };
+  lobbyChatInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      sendChatMessage(lobbyChatInput.value);
+      lobbyChatInput.value = "";
+    }
+  });
+
+  // In-game chat - posilani
+  gameChatInput.addEventListener("keydown", (e) => {
+    e.stopPropagation(); // ax to nezachyti globalni keydown
+    if (e.key === "Enter") {
+      sendChatMessage(gameChatInput.value);
+      gameChatInput.value = "";
+      closeGameChat();
+    } else if (e.key === "Escape") {
+      closeGameChat();
+    }
+  });
+  gameChatInput.addEventListener("keyup", (e) => e.stopPropagation());
+
+  // Prijem chat zprav od serveru
+  socket.on("chat", (msg) => {
+    appendChatMessage(msg);
+  });
+
+  function appendChatMessage(msg) {
+    // Lobby log
+    const lobbyRow = document.createElement("div");
+    lobbyRow.className = "chat-msg";
+    lobbyRow.innerHTML =
+      `<span class="chat-name" style="color:${msg.color}">${escapeHtml(msg.name)}:</span>` +
+      `<span class="chat-text">${escapeHtml(msg.text)}</span>`;
+    lobbyChatLog.appendChild(lobbyRow);
+    lobbyChatLog.scrollTop = lobbyChatLog.scrollHeight;
+    // Limit pocet zprav v lobby logu
+    while (lobbyChatLog.children.length > 50) {
+      lobbyChatLog.removeChild(lobbyChatLog.firstChild);
+    }
+
+    // In-game log (zprava zmizi po 6 sekundach)
+    const gameRow = document.createElement("div");
+    gameRow.className = "game-chat-msg";
+    gameRow.innerHTML =
+      `<span class="chat-name" style="color:${msg.color}">${escapeHtml(msg.name)}:</span>` +
+      `<span class="chat-text">${escapeHtml(msg.text)}</span>`;
+    gameChatLog.appendChild(gameRow);
+    while (gameChatLog.children.length > 6) {
+      gameChatLog.removeChild(gameChatLog.firstChild);
+    }
+    setTimeout(() => {
+      gameRow.classList.add("fading");
+      setTimeout(() => gameRow.remove(), 1000);
+    }, 6000);
+  }
+
+  // Pri zmene mistnosti vycisti chat
+  function clearChatLogs() {
+    lobbyChatLog.innerHTML = "";
+    gameChatLog.innerHTML = "";
+  }
+
   // ---------- INPUT ----------
   const input = {
     left: false, right: false, jump: false, shoot: false,
@@ -147,6 +247,16 @@
   };
 
   document.addEventListener("keydown", (e) => {
+    // Pokud je chat otevreny, klavesy nezpracovavej (chat input je sam zvladne)
+    if (isChatOpen) return;
+
+    // Enter otevre in-game chat (jen kdyz jsme ve hre)
+    if (e.key === "Enter" && screens.game.classList.contains("active")) {
+      openGameChat();
+      e.preventDefault();
+      return;
+    }
+
     const k = e.key.toLowerCase();
     if (keyMap[k]) {
       input[keyMap[k]] = true;
@@ -158,6 +268,7 @@
     else if (k === "4") input.switch = "laser";
   });
   document.addEventListener("keyup", (e) => {
+    if (isChatOpen) return;
     const k = e.key.toLowerCase();
     if (keyMap[k]) {
       input[keyMap[k]] = false;

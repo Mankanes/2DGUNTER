@@ -904,6 +904,37 @@ io.on("connection", (socket) => {
     room.game.setInput(socket.id, data || {});
   });
 
+  // Chat - rate limit a max delka
+  let lastChatTime = 0;
+  const chatHistory = [];
+  socket.on("chat", (data) => {
+    const roomId = socketRoom.get(socket.id);
+    const room = rooms.get(roomId);
+    if (!room) return;
+    const player = room.game.players.get(socket.id);
+    if (!player) return;
+
+    const now = Date.now();
+    // Rate limit: max 1 zprava za 500ms
+    if (now - lastChatTime < 500) return;
+    // Anti-spam: max 5 zprav za 5 sekund
+    chatHistory.push(now);
+    while (chatHistory.length && now - chatHistory[0] > 5000) chatHistory.shift();
+    if (chatHistory.length > 5) return;
+    lastChatTime = now;
+
+    let text = (data?.text || "").toString().slice(0, 100).trim();
+    if (!text) return;
+
+    io.to(roomId).emit("chat", {
+      id: socket.id,
+      name: player.name,
+      color: player.color,
+      text,
+      time: now,
+    });
+  });
+
   socket.on("leave_room", () => {
     leaveRoom(socket);
   });

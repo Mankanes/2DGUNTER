@@ -78,6 +78,15 @@
           First to <span id="lobby-win-score">3</span> round wins takes the match.
           Last player standing wins each round.
         </div>
+
+        <div class="chat-box">
+          <div class="section-title">Chat</div>
+          <div id="lobby-chat-log" class="chat-log"></div>
+          <div class="chat-input-row">
+            <input id="lobby-chat-input" type="text" maxlength="100" placeholder="Type a message..." />
+            <button id="lobby-chat-send" class="btn-small">Send</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -89,6 +98,12 @@
         <div id="weapon-info" class="weapon-info"></div>
         <div id="phase-banner" class="phase-banner"></div>
         <div id="killfeed" class="killfeed"></div>
+        <div id="game-chat" class="game-chat">
+          <div id="game-chat-log" class="game-chat-log"></div>
+          <div id="game-chat-input-wrap" class="game-chat-input-wrap">
+            <input id="game-chat-input" type="text" maxlength="100" placeholder="Press Enter to chat..." />
+          </div>
+        </div>
       </div>
     </div>
   </div>
