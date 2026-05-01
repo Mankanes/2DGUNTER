@@ -26,8 +26,8 @@ const SHARED = {
     ACCEL_GROUND: 4500,
     ACCEL_AIR: 2200,
     FRICTION_GROUND: 3500,
-    JUMP_VELOCITY: 720,
-    DOUBLE_JUMP_VELOCITY: 640,
+    JUMP_VELOCITY: 850,
+    DOUBLE_JUMP_VELOCITY: 780,
     MAX_JUMPS: 2,
     MAX_HEALTH: 100,
     RESPAWN_DELAY: 1.2,
@@ -940,6 +940,8 @@ function joinRoom(socket, roomId, name, ack) {
   }
   socket.join(roomId);
   socketRoom.set(socket.id, roomId);
+
+  console.log(`[JOIN] ${socket.id.slice(0,6)} (${name}) -> room ${roomId} - hracu v mistnosti: ${room.game.players.size}`);
 
   if (typeof ack === "function") {
     ack({
