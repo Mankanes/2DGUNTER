@@ -351,8 +351,8 @@
       return;
     }
 
-    // Enter otevre in-game chat (jen kdyz jsme ve hre)
-    if (e.key === "Enter" && screens.game.classList.contains("active")) {
+    // Z otevre in-game chat (jen kdyz jsme ve hre)
+    if ((e.key === "z" || e.key === "Z") && screens.game.classList.contains("active")) {
       openGameChat();
       e.preventDefault();
       return;
