@@ -818,7 +818,20 @@
 
     // Pojistka: po fyzice ucely overit ze nemame NaN
     if (!localMeIsValid()) {
-      console.warn("[localMe] Fyzika vyrobila NaN, deaktivuju");
+      // Detailni diagnostika - ale jen jednou (rate limit)
+      if (!window._nanLogged) {
+        window._nanLogged = true;
+        console.warn("[localMe] Fyzika vyrobila NaN. Stav:", {
+          x: localMe.x,
+          y: localMe.y,
+          vx: localMe.vx,
+          vy: localMe.vy,
+          onGround: localMe.onGround,
+          jumpsLeft: localMe.jumpsLeft,
+          dt: dt,
+          input: { left: input.left, right: input.right, jump: input.jump },
+        });
+      }
       localMe.active = false;
     }
   }
