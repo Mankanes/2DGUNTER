@@ -12,6 +12,28 @@
   const SNAPSHOT_BUFFER_MS = 100;
   const snapshots = [];
 
+  // ---------- KROK 1: PREDICTION STATE (ALE NEPOUZIVAME RENDER) ----------
+  // Pocitame to paralelne, ale render bere serverovou pozici. Diky tomu
+  // muzeme overit ze fyzika nepadne, aniz bychom riskovali ze hracova
+  // postava zmizi. Renderovani lokalni pozice se zapne v Kroku 2.
+  const localMe = {
+    active: false,
+    x: 0, y: 0,
+    vx: 0, vy: 0,
+    onGround: false,
+    jumpsLeft: 2,
+    facing: 1,
+    lastJumpInput: false,
+  };
+
+  function localMeIsValid() {
+    return localMe.active &&
+           Number.isFinite(localMe.x) &&
+           Number.isFinite(localMe.y) &&
+           Number.isFinite(localMe.vx) &&
+           Number.isFinite(localMe.vy);
+  }
+
   const screens = {
     menu: document.getElementById("menu"),
     lobby: document.getElementById("lobby"),
@@ -422,6 +444,48 @@
     snapshots.push(snap);
     while (snapshots.length > 120) snapshots.shift();
 
+    // KROK 1: synchronizace localMe se serverem
+    const serverMe = snap.players.find((p) => p.id === selfId);
+    if (serverMe) {
+      const sx = Number(serverMe.x);
+      const sy = Number(serverMe.y);
+      const validServer = Number.isFinite(sx) && Number.isFinite(sy);
+
+      if (!serverMe.alive) {
+        // Mrtvy - vypni prediction
+        localMe.active = false;
+      } else if (!localMe.active && validServer) {
+        // Spawn - inicializuj lokalni pozici
+        localMe.active = true;
+        localMe.x = sx;
+        localMe.y = sy;
+        localMe.vx = 0;
+        localMe.vy = 0;
+        localMe.onGround = !!serverMe.onGround;
+        localMe.facing = serverMe.facing || 1;
+        localMe.jumpsLeft = SHARED.PLAYER.MAX_JUMPS;
+        localMe.lastJumpInput = false;
+      } else if (localMe.active && validServer) {
+        // Bezna oprava (reconciliation): pokud se rozejdeme moc, resyncuj
+        if (!localMeIsValid()) {
+          localMe.x = sx;
+          localMe.y = sy;
+          localMe.vx = 0;
+          localMe.vy = 0;
+        } else {
+          const ddx = sx - localMe.x;
+          const ddy = sy - localMe.y;
+          if (Math.abs(ddx) > 300 || Math.abs(ddy) > 300) {
+            // Velky rozdil - skoc na server pozici (asi knockback nebo respawn)
+            localMe.x = sx;
+            localMe.y = sy;
+          }
+        }
+      }
+    } else {
+      localMe.active = false;
+    }
+
     if (screens.lobby.classList.contains("active")) {
       if (snap.phase !== "lobby") {
         // Prechod lobby -> hra: vycisti stare particles
@@ -661,6 +725,104 @@
     }
   }
 
+  // ---------- KROK 1: LOKALNI FYZIKA (paralelne, ale neovlivnuje render) ----------
+  function updateLocalPhysics(dt) {
+    if (!localMe.active || !SHARED || !snapshots.length) return;
+    if (!Number.isFinite(dt) || dt <= 0 || dt > 0.1) return;
+    if (!localMeIsValid()) {
+      localMe.active = false;
+      return;
+    }
+
+    const PL = SHARED.PLAYER;
+
+    // Pohyb podle vstupu
+    const wantLeft = input.left && !input.right;
+    const wantRight = input.right && !input.left;
+    const targetVx = wantLeft ? -PL.MOVE_SPEED : wantRight ? PL.MOVE_SPEED : 0;
+    const accel = localMe.onGround ? PL.ACCEL_GROUND : PL.ACCEL_AIR;
+
+    if (targetVx !== 0) {
+      const diff = targetVx - localMe.vx;
+      const step = Math.sign(diff) * accel * dt;
+      if (Math.abs(step) > Math.abs(diff)) localMe.vx = targetVx;
+      else localMe.vx += step;
+      localMe.facing = wantLeft ? -1 : 1;
+    } else if (localMe.onGround) {
+      const fric = PL.FRICTION_GROUND * dt;
+      if (localMe.vx > fric) localMe.vx -= fric;
+      else if (localMe.vx < -fric) localMe.vx += fric;
+      else localMe.vx = 0;
+    }
+
+    // Skok (edge-triggered)
+    if (input.jump && !localMe.lastJumpInput && localMe.jumpsLeft > 0) {
+      if (localMe.onGround || localMe.jumpsLeft === PL.MAX_JUMPS) {
+        localMe.vy = -PL.JUMP_VELOCITY;
+      } else {
+        localMe.vy = -PL.DOUBLE_JUMP_VELOCITY;
+      }
+      localMe.jumpsLeft--;
+      localMe.onGround = false;
+    }
+    localMe.lastJumpInput = input.jump;
+
+    // Gravitace
+    localMe.vy += SHARED.GRAVITY * dt;
+    if (localMe.vy > SHARED.MAX_FALL_SPEED) localMe.vy = SHARED.MAX_FALL_SPEED;
+
+    // Kolize s platformami z posledniho snapshotu
+    const lastSnap = snapshots[snapshots.length - 1];
+    const map = SHARED.MAPS[lastSnap.mapKey];
+    if (!map) return;
+    const W = SHARED.PLAYER.WIDTH;
+    const H = SHARED.PLAYER.HEIGHT;
+
+    localMe.onGround = false;
+
+    // X osa
+    localMe.x += localMe.vx * dt;
+    for (let i = 0; i < map.platforms.length; i++) {
+      const plat = map.platforms[i];
+      if (lastSnap.platforms[i] && lastSnap.platforms[i].destroyed) continue;
+      if (localMe.x < plat.x + plat.w && localMe.x + W > plat.x &&
+          localMe.y < plat.y + plat.h && localMe.y + H > plat.y) {
+        if (localMe.vx > 0) localMe.x = plat.x - W;
+        else if (localMe.vx < 0) localMe.x = plat.x + plat.w;
+        localMe.vx = 0;
+      }
+    }
+
+    // Y osa
+    localMe.y += localMe.vy * dt;
+    for (let i = 0; i < map.platforms.length; i++) {
+      const plat = map.platforms[i];
+      if (lastSnap.platforms[i] && lastSnap.platforms[i].destroyed) continue;
+      if (localMe.x < plat.x + plat.w && localMe.x + W > plat.x &&
+          localMe.y < plat.y + plat.h && localMe.y + H > plat.y) {
+        if (localMe.vy > 0) {
+          localMe.y = plat.y - H;
+          localMe.onGround = true;
+          localMe.vy = 0;
+          localMe.jumpsLeft = PL.MAX_JUMPS;
+        } else if (localMe.vy < 0) {
+          localMe.y = plat.y + plat.h;
+          localMe.vy = 0;
+        }
+      }
+    }
+
+    // Hranice mapy
+    if (localMe.x < -40) localMe.x = -40;
+    if (localMe.x > SHARED.WORLD_WIDTH - W + 40) localMe.x = SHARED.WORLD_WIDTH - W + 40;
+
+    // Pojistka: po fyzice ucely overit ze nemame NaN
+    if (!localMeIsValid()) {
+      console.warn("[localMe] Fyzika vyrobila NaN, deaktivuju");
+      localMe.active = false;
+    }
+  }
+
   // ---------- CAMERA + RENDER ----------
   function computeCamera() {
     const ww = SHARED.WORLD_WIDTH;
@@ -688,6 +850,10 @@
     if (!SHARED || !screens.game.classList.contains("active")) return;
     const state = getInterpolatedState();
     if (!state) return;
+
+    // KROK 1: Pocitej lokalni fyziku, ale neovlivnuj render
+    // (pokud cokoliv selze, hra vypada presne stejne jak driv)
+    updateLocalPhysics(dt);
 
     updateParticles(dt);
 
