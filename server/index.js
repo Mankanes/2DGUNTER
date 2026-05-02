@@ -238,31 +238,6 @@ class Game {
     };
   }
 
-  // Klient-authoritative pohyb: klient nam posila svou aktualni pozici
-  // a server ji jen ulozi pro broadcast ostatnim. Damage, knockback
-  // a smrt si server pocita sam.
-  setPosition(socketId, pos) {
-    const p = this.players.get(socketId);
-    if (!p || !p.alive || p.isBot) return;
-    // Striktni kontrola - musi byt validni cisla, ne NaN ani Infinity
-    const x = Number(pos.x);
-    const y = Number(pos.y);
-    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
-    // Lehka anti-cheat: zustan v rozumnem rozsahu mapy
-    p.x = clamp(x, -100, SHARED.WORLD_WIDTH + 100);
-    p.y = clamp(y, -200, SHARED.PLAYER.DEATH_Y + 200);
-    const vx = Number(pos.vx);
-    const vy = Number(pos.vy);
-    p.vx = Number.isFinite(vx) ? clamp(vx, -2000, 2000) : 0;
-    p.vy = Number.isFinite(vy) ? clamp(vy, -2000, 2000) : 0;
-    p.facing = pos.facing >= 0 ? 1 : -1;
-    p.onGround = !!pos.onGround;
-    // Pad mimo mapu = smrt (server stale resi smrt)
-    if (p.y > SHARED.PLAYER.DEATH_Y) {
-      this.killPlayer(p, null, "fall");
-    }
-  }
-
   tryStartMatch() {
     const ready = [...this.players.values()].filter((p) => p.ready);
     if (
@@ -427,28 +402,7 @@ class Game {
       p.knockbackVx *= damp;
       p.knockbackVy *= damp;
 
-      // KLIENT-AUTHORITATIVE: realni hraci si pocitaji pohyb sami,
-      // server jejich pozici jen prepojuje. Server stale dela:
-      // - strelbu (allowShoot && shoot)
-      // - prepinani zbrane
-      // - registraci damage od strel
-      if (!p.isBot) {
-        const inp = p.input;
-        // Switch zbrane stale resime na serveru (autoritativni)
-        if (inp.switch && SHARED.WEAPONS[inp.switch]) {
-          if (p.weapon !== inp.switch) {
-            p.weapon = inp.switch;
-            if (p.weapon === "pistol") p.ammo = Infinity;
-          }
-        }
-        // Strelba taky - server registruje hit na ostatnich
-        if (allowShoot && inp.shoot) {
-          this.tryShoot(p);
-        }
-        continue; // dal bezi jen pro boty
-      }
-
-      // BOT FYZIKA (server-authoritative)
+      // Server-authoritative fyzika pro VSECHNY hrace (vc. realnych)
       const inp = p.input;
       const wantLeft = inp.left && !inp.right;
       const wantRight = inp.right && !inp.left;
@@ -488,6 +442,19 @@ class Game {
       this.moveAndCollide(p, totalVx * dt, totalVy * dt);
 
       if (p.onGround) p.jumpsLeft = PL.MAX_JUMPS;
+
+      // Zbranovy switch
+      if (inp.switch && SHARED.WEAPONS[inp.switch]) {
+        if (p.weapon !== inp.switch) {
+          p.weapon = inp.switch;
+          if (p.weapon === "pistol") p.ammo = Infinity;
+        }
+      }
+
+      // Strelba
+      if (allowShoot && inp.shoot) {
+        this.tryShoot(p);
+      }
 
       if (p.y > SHARED.PLAYER.DEATH_Y) {
         this.killPlayer(p, null, "fall");
@@ -591,17 +558,8 @@ class Game {
       });
     }
 
-    const recoilVx = -ax * wepDef.recoil;
-    const recoilVy = -ay * wepDef.recoil * 0.5;
-    p.knockbackVx += recoilVx;
-    p.knockbackVy += recoilVy;
-    // Posli klientovi recoil impulse
-    this.events.push({
-      type: "knockback",
-      targetId: p.id,
-      vx: recoilVx,
-      vy: recoilVy,
-    });
+    p.knockbackVx -= ax * wepDef.recoil;
+    p.knockbackVy -= ay * wepDef.recoil * 0.5;
 
     this.events.push({
       type: "muzzle", x: muzzleX, y: muzzleY,
@@ -669,17 +627,8 @@ class Game {
       const mag = Math.hypot(b.vx, b.vy) || 1;
       const dirX = b.vx / mag;
       const dirY = b.vy / mag;
-      const kx = dirX * b.knockback;
-      const ky = dirY * b.knockback - 60;
-      victim.knockbackVx += kx;
-      victim.knockbackVy += ky;
-      // Posli klientovi knockback impulse aby si ho applikoval lokalne
-      this.events.push({
-        type: "knockback",
-        targetId: victim.id,
-        vx: kx,
-        vy: ky,
-      });
+      victim.knockbackVx += dirX * b.knockback;
+      victim.knockbackVy += dirY * b.knockback - 60;
       this.events.push({
         type: "hit", x: b.x, y: b.y,
         victimId: victim.id, damage: b.damage, weapon: b.weapon,
@@ -725,17 +674,8 @@ class Game {
         const nx = (cx - b.x) / (dist || 1);
         const ny = (cy - b.y) / (dist || 1);
         const force = b.knockback * falloff;
-        const kx = nx * force;
-        const ky = ny * force - 120;
-        p.knockbackVx += kx;
-        p.knockbackVy += ky;
-        // Posli klientovi knockback impulse
-        this.events.push({
-          type: "knockback",
-          targetId: p.id,
-          vx: kx,
-          vy: ky,
-        });
+        p.knockbackVx += nx * force;
+        p.knockbackVy += ny * force - 120;
         if (p.hp <= 0) {
           this.killPlayer(p, b.ownerId, "rocket");
         }
@@ -1124,14 +1064,6 @@ io.on("connection", (socket) => {
     const room = rooms.get(roomId);
     if (!room) return;
     room.game.setInput(socket.id, data || {});
-  });
-
-  // Klient-authoritative pohyb: klient nam posila svou pozici
-  socket.on("position", (data) => {
-    const roomId = socketRoom.get(socket.id);
-    const room = rooms.get(roomId);
-    if (!room) return;
-    room.game.setPosition(socket.id, data || {});
   });
 
   // Chat - rate limit a max delka
