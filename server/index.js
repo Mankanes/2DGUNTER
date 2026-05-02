@@ -13,7 +13,7 @@ const { Server } = require("socket.io");
 // ============================================================
 
 const SHARED = {
-  TICK_RATE: 60,
+  TICK_RATE: 30,                // server simulation Hz (sniženo na 30 pro lepsi vykon na pomalem hostingu)
   WORLD_WIDTH: 1600,
   WORLD_HEIGHT: 900,
   GRAVITY: 1800,
@@ -798,8 +798,7 @@ class Game {
       players: [...this.players.values()].map((p) => ({
         id: p.id, name: p.name, color: p.color,
         x: +p.x.toFixed(2), y: +p.y.toFixed(2),
-        vx: +p.vx.toFixed(2), vy: +p.vy.toFixed(2),
-        facing: p.facing, onGround: p.onGround,
+        facing: p.facing,
         hp: Math.max(0, Math.round(p.hp)),
         alive: p.alive, weapon: p.weapon,
         ammo: p.ammo === Infinity ? -1 : p.ammo,

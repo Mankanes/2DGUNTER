@@ -396,6 +396,8 @@
 
   setInterval(() => {
     if (!SHARED) return;
+    // Posilat input jen kdyz jsme ve hre (sila pri lobby/menu zbytecne)
+    if (!screens.game.classList.contains("active")) return;
     const self = getInterpolatedSelf();
     let aimX = 1, aimY = 0;
     if (self) {
@@ -412,7 +414,7 @@
       shoot: input.shoot, aimX, aimY, switch: input.switch,
     });
     input.switch = null;
-  }, 1000 / 60);
+  }, 1000 / 30);  // 30 Hz = stejne jako server tick rate
 
   // ---------- SNAPSHOTS / INTERPOLATION ----------
   socket.on("state", (snap) => {
@@ -422,12 +424,17 @@
 
     if (screens.lobby.classList.contains("active")) {
       if (snap.phase !== "lobby") {
+        // Prechod lobby -> hra: vycisti stare particles
+        particles.length = 0;
         showScreen("game");
         resizeCanvas();
-        spawnInitialAmbient();
       }
     }
     if (screens.game.classList.contains("active") && snap.phase === "lobby") {
+      // Prechod hra -> lobby: vycisti snapshoty a particles
+      snapshots.length = 0;
+      snapshots.push(snap); // ale ponech aktualni snapshot
+      particles.length = 0;
       showScreen("lobby");
       isReady = false;
       const btn = document.getElementById("btn-ready");
@@ -460,18 +467,30 @@
   }
 
   function getInterpolatedSelf() {
-    const s = getInterpolatedState();
-    if (!s) return null;
-    return s.players.find((p) => p.id === selfId);
+    // Optimalizace: nemusime klonovat cely state - jen najdeme self
+    // v poslednim snapshotu (input handler nepotrebuje interpolaci)
+    if (!snapshots.length) return null;
+    const last = snapshots[snapshots.length - 1];
+    return last.players.find((p) => p.id === selfId);
   }
 
   function cloneSnapshot(s) {
+    // Pouze players a bullets se interpoluji (mutuji)
+    // Ostatni pole (pickups, platforms) staci shallow reference
     return {
-      ...s,
+      tick: s.tick,
+      time: s.time,
+      phase: s.phase,
+      phaseTimer: s.phaseTimer,
+      roundNumber: s.roundNumber,
+      lastWinner: s.lastWinner,
+      matchWinner: s.matchWinner,
+      mapKey: s.mapKey,
+      events: s.events,
+      pickups: s.pickups,
+      platforms: s.platforms,
       players: s.players.map((p) => ({ ...p })),
       bullets: s.bullets.map((b) => ({ ...b })),
-      pickups: s.pickups.map((p) => ({ ...p })),
-      platforms: s.platforms.map((p) => ({ ...p })),
     };
   }
 
@@ -494,9 +513,18 @@
 
   // ---------- EVENTS / PARTICLES ----------
   const particles = [];
+  const MAX_PARTICLES = 600;
   let shakeAmount = 0;
   let shakeDecay = 0;
   let lastTickProcessed = -1;
+
+  function addParticle(p) {
+    // Pokud je particles array plne, zahod nejstarsi
+    if (particles.length >= MAX_PARTICLES) {
+      particles.shift();
+    }
+    particles.push(p);
+  }
 
   function handleEvents(snap) {
     if (lastTickProcessed === snap.tick) return;
@@ -537,7 +565,7 @@
     for (let i = 0; i < 6; i++) {
       const ang = Math.atan2(dy, dx) + (Math.random() - 0.5) * 0.5;
       const sp = 200 + Math.random() * 200;
-      particles.push({
+      addParticle({
         x, y,
         vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp,
         life: 0.18, maxLife: 0.18,
@@ -545,7 +573,7 @@
         color, kind: "spark",
       });
     }
-    particles.push({
+    addParticle({
       x, y, vx: 0, vy: 0,
       life: 0.08, maxLife: 0.08,
       size: 22, color, kind: "flash",
@@ -558,7 +586,7 @@
     for (let i = 0; i < 14; i++) {
       const ang = Math.random() * Math.PI * 2;
       const sp = 100 + Math.random() * 350;
-      particles.push({
+      addParticle({
         x, y,
         vx: Math.cos(ang) * sp,
         vy: Math.sin(ang) * sp - 100,
@@ -575,7 +603,7 @@
     for (let i = 0; i < 5; i++) {
       const ang = Math.random() * Math.PI * 2;
       const sp = 60 + Math.random() * 200;
-      particles.push({
+      addParticle({
         x, y,
         vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp,
         life: 0.3, maxLife: 0.3,
@@ -589,7 +617,7 @@
       const ang = Math.random() * Math.PI * 2;
       const sp = 100 + Math.random() * 600;
       const colors = ["#ffe66d", "#ff9f43", "#ff5e3d", "#fff"];
-      particles.push({
+      addParticle({
         x, y,
         vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp,
         life: 0.5 + Math.random() * 0.4, maxLife: 0.9,
@@ -598,7 +626,7 @@
         kind: "ember", gravity: 200,
       });
     }
-    particles.push({
+    addParticle({
       x, y, vx: 0, vy: 0,
       life: 0.4, maxLife: 0.4,
       size: 0, maxSize: radius,
@@ -609,7 +637,7 @@
     for (let i = 0; i < 18; i++) {
       const ang = Math.random() * Math.PI * 2;
       const sp = 80 + Math.random() * 250;
-      particles.push({
+      addParticle({
         x, y,
         vx: Math.cos(ang) * sp,
         vy: Math.sin(ang) * sp - 100,
@@ -623,7 +651,7 @@
     for (let i = 0; i < 16; i++) {
       const ang = Math.random() * Math.PI * 2;
       const sp = 100 + Math.random() * 200;
-      particles.push({
+      addParticle({
         x: x + 14, y: y + 14,
         vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp,
         life: 0.4, maxLife: 0.4,
@@ -631,9 +659,6 @@
         color: "#54e0ff", kind: "spark",
       });
     }
-  }
-  function spawnInitialAmbient() {
-    particles.length = 0;
   }
 
   // ---------- CAMERA + RENDER ----------
@@ -677,16 +702,20 @@
   requestAnimationFrame(frame);
 
   function updateParticles(dt) {
-    for (let i = particles.length - 1; i >= 0; i--) {
+    // In-place filter (rychlejsi nez splice v cyklu)
+    let writeIdx = 0;
+    for (let i = 0; i < particles.length; i++) {
       const p = particles[i];
       p.life -= dt;
-      if (p.life <= 0) { particles.splice(i, 1); continue; }
+      if (p.life <= 0) continue;
       if (p.kind !== "ring" && p.kind !== "flash") {
         if (p.gravity) p.vy += p.gravity * dt;
         p.x += p.vx * dt;
         p.y += p.vy * dt;
       }
+      particles[writeIdx++] = p;
     }
+    particles.length = writeIdx;
   }
 
   function render(state) {
