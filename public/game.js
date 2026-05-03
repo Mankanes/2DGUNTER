@@ -1548,6 +1548,67 @@
         mouseX <= cw && mouseY <= ch) {
       drawCrosshair(ctx, mouseX, mouseY);
     }
+
+    // Minimapa (jen mobil)
+    drawMinimap(state);
+  }
+
+  // ---------- MINIMAPA (mobile only) ----------
+  const minimapEl = document.getElementById("minimap");
+  const minimapCtx = minimapEl ? minimapEl.getContext("2d") : null;
+
+  function drawMinimap(state) {
+    if (!minimapEl || !minimapCtx) return;
+    if (!isTouchDevice) return; // jen mobil
+
+    const ww = SHARED.WORLD_WIDTH;
+    const wh = SHARED.WORLD_HEIGHT;
+    const mw = minimapEl.width;
+    const mh = minimapEl.height;
+    const sx = mw / ww;
+    const sy = mh / wh;
+
+    // Pozadi
+    minimapCtx.clearRect(0, 0, mw, mh);
+    minimapCtx.fillStyle = "rgba(20, 30, 60, 0.6)";
+    minimapCtx.fillRect(0, 0, mw, mh);
+
+    // Platformy
+    const map = SHARED.MAPS[state.mapKey];
+    if (map) {
+      for (let i = 0; i < map.platforms.length; i++) {
+        const plat = map.platforms[i];
+        const live = state.platforms[i];
+        if (live && live.destroyed) continue;
+        minimapCtx.fillStyle = "#3a4a6a";
+        minimapCtx.fillRect(plat.x * sx, plat.y * sy, plat.w * sx, Math.max(2, plat.h * sy));
+      }
+    }
+
+    // Pickupy (zbrane na zemi)
+    for (const pu of state.pickups) {
+      minimapCtx.fillStyle = "#ffe66d";
+      minimapCtx.fillRect(pu.x * sx - 1, pu.y * sy - 1, 3, 3);
+    }
+
+    // Hraci
+    for (const p of state.players) {
+      if (!p.alive) continue;
+      const px = (p.x + SHARED.PLAYER.WIDTH / 2) * sx;
+      const py = (p.y + SHARED.PLAYER.HEIGHT / 2) * sy;
+      // Barva vetsi pro sebe, mensi pro ostatni
+      const r = p.id === selfId ? 4 : 3;
+      minimapCtx.fillStyle = p.color;
+      minimapCtx.beginPath();
+      minimapCtx.arc(px, py, r, 0, Math.PI * 2);
+      minimapCtx.fill();
+      // Ja - bily kruzek navíc
+      if (p.id === selfId) {
+        minimapCtx.strokeStyle = "#fff";
+        minimapCtx.lineWidth = 1.5;
+        minimapCtx.stroke();
+      }
+    }
   }
 
   function drawBackground(map) {

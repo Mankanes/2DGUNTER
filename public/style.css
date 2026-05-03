@@ -1510,3 +1510,49 @@ body.has-touch .mobile-left {
   body.has-touch .move-joystick { width: 105px; height: 105px; }
   body.has-touch .move-joystick-stick { width: 42px; height: 42px; margin-top: -21px; margin-left: -21px; }
 }
+
+/* Schova popisy joysticku */
+body.has-touch .move-joystick-hint,
+body.has-touch .aim-joystick-hint {
+  display: none;
+}
+
+/* Joysticky niz */
+body.has-touch .mobile-left {
+  bottom: calc(40px + var(--safe-bottom));
+}
+body.has-touch .mobile-right {
+  bottom: calc(40px + var(--safe-bottom));
+}
+
+@media (max-width: 850px) and (orientation: landscape) {
+  body.has-touch .mobile-left { bottom: calc(30px + var(--safe-bottom)); }
+  body.has-touch .mobile-right { bottom: calc(30px + var(--safe-bottom)); }
+}
+@media (max-width: 700px) and (orientation: landscape) {
+  body.has-touch .mobile-left { bottom: calc(20px + var(--safe-bottom)); }
+  body.has-touch .mobile-right { bottom: calc(20px + var(--safe-bottom)); }
+}
+
+/* ======================= MINIMAPA (jen mobil) ======================= */
+.minimap {
+  display: none; /* schovana na PC */
+  position: absolute;
+  top: calc(56px + var(--safe-top));
+  left: calc(12px + var(--safe-left));
+  background: rgba(10, 14, 26, 0.75);
+  border: 2px solid #2a3a5a;
+  border-radius: 8px;
+  pointer-events: none;
+  z-index: 90;
+}
+body.has-touch .minimap {
+  display: block;
+}
+
+@media (max-width: 700px) and (orientation: landscape) {
+  .minimap {
+    width: 160px !important;
+    height: 80px;
+  }
+}
