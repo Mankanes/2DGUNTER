@@ -504,6 +504,11 @@
     appendConsoleLine(msg.text, msg.type || "info");
   });
 
+  // Ping response - server posila request, my hned odpovime
+  socket.on("ping_request", (data) => {
+    socket.emit("ping_response", { t: data?.t || Date.now() });
+  });
+
   // ---------- CHAT ----------
   const lobbyChatLog = document.getElementById("lobby-chat-log");
   const lobbyChatInput = document.getElementById("lobby-chat-input");
@@ -675,6 +680,13 @@
     // Pokud je settings modal otevreny (a poslouchame klavesu pro keybind), nereaguj
     if (isListeningForKey) return;
 
+    // Tab - rozsireny scoreboard (drz pro zobrazeni)
+    if (e.key === "Tab" && screens.game.classList.contains("active")) {
+      e.preventDefault();
+      showTabScoreboard();
+      return;
+    }
+
     const action = actionForKey(e.key);
 
     // Konzole
@@ -714,6 +726,13 @@
   document.addEventListener("keyup", (e) => {
     if (isConsoleOpen || isChatOpen) return;
     if (isListeningForKey) return;
+
+    // Tab pusten - schovej scoreboard
+    if (e.key === "Tab") {
+      e.preventDefault();
+      hideTabScoreboard();
+      return;
+    }
 
     const action = actionForKey(e.key);
     if (action === "left" || action === "right" || action === "jump") {
@@ -1423,6 +1442,76 @@
       banner.style.display = "none";
       banner.style.color = "#fff";
     }
+
+    // Tab scoreboard - aktualizovat pokud je viditelny
+    if (isTabOpen) updateTabScoreboard(state);
+  }
+
+  // ---------- TAB SCOREBOARD (rozsireny) ----------
+  let isTabOpen = false;
+  const tabScoreboard = document.getElementById("tab-scoreboard");
+  const tabTbody = document.getElementById("tab-tbody");
+
+  function showTabScoreboard() {
+    if (isTabOpen) return;
+    isTabOpen = true;
+    tabScoreboard.classList.add("active");
+  }
+  function hideTabScoreboard() {
+    isTabOpen = false;
+    tabScoreboard.classList.remove("active");
+  }
+  // Pojistka: kdyz se ztrati focus okna (alt-tab), schovej
+  window.addEventListener("blur", hideTabScoreboard);
+
+  function updateTabScoreboard(state) {
+    // Header info
+    const roundInfo = document.getElementById("tab-round-info");
+    const mapInfo = document.getElementById("tab-map-info");
+    if (roundInfo) {
+      roundInfo.textContent = state.phase === "lobby" ? "Lobby" : `Round ${state.roundNumber}`;
+    }
+    if (mapInfo) {
+      const mapName = SHARED.MAPS[state.mapKey]?.name || state.mapKey;
+      mapInfo.textContent = mapName;
+    }
+
+    // Seradime hrace - admini nahore, pak podle wins
+    const players = state.players.slice().sort((a, b) => {
+      if (a.isAdmin !== b.isAdmin) return b.isAdmin ? 1 : -1;
+      return b.score - a.score;
+    });
+
+    let html = "";
+    for (const p of players) {
+      const kd = p.deaths > 0 ? (p.kills / p.deaths).toFixed(2) : (p.kills > 0 ? p.kills.toFixed(2) : "0.00");
+      const kdClass = p.deaths === 0 && p.kills === 0 ? "" :
+                     parseFloat(kd) >= 1.5 ? "tab-kd-good" :
+                     parseFloat(kd) >= 0.8 ? "tab-kd-mid" : "tab-kd-bad";
+
+      const ping = p.ping || 0;
+      const pingClass = ping === 0 ? "" :
+                        ping < 80 ? "tab-ping-good" :
+                        ping < 200 ? "tab-ping-mid" : "tab-ping-bad";
+      const pingText = ping === 0 ? "—" : `${ping}ms`;
+
+      const adminBadge = p.isAdmin ? "👑 " : "";
+      const rowClasses = [
+        p.alive ? "" : "dead",
+        p.id === selfId ? "self" : "",
+      ].filter(Boolean).join(" ");
+
+      html += `<tr class="${rowClasses}">
+        <td><span class="tab-swatch" style="background:${p.color}"></span></td>
+        <td><span class="tab-name${p.isAdmin ? ' admin' : ''}">${adminBadge}${escapeHtml(p.name)}${p.id === selfId ? " ★" : ""}</span></td>
+        <td class="tab-wins">${p.score}</td>
+        <td>${p.kills}</td>
+        <td>${p.deaths}</td>
+        <td class="${kdClass}">${kd}</td>
+        <td class="${pingClass}">${pingText}</td>
+      </tr>`;
+    }
+    tabTbody.innerHTML = html;
   }
 
   function addKillFeed(ev) {

@@ -209,6 +209,7 @@ class Game {
       ready: !!isBot, // boti jsou vzdy ready
       isBot,
       isAdmin: false,
+      ping: 0,
       botMove: false, // jestli se bot ma hybat
       shotCountWindow: [],
     };
@@ -805,6 +806,7 @@ class Game {
         score: p.score, kills: p.kills, deaths: p.deaths,
         ready: p.ready,
         isAdmin: !!p.isAdmin,
+        ping: p.isBot ? 0 : (p.ping || 0),
       })),
       bullets: this.bullets.map((b) => ({
         id: b.id, x: +b.x.toFixed(1), y: +b.y.toFixed(1),
@@ -880,6 +882,28 @@ function removeEmptyRoom(roomId) {
 
 io.on("connection", (socket) => {
   let playerName = "Player";
+
+  // Ping measurement - server posila ping, klient odpovi pong, mereme RTT
+  socket.data.ping = 0;
+  let lastPingTime = 0;
+  const pingInterval = setInterval(() => {
+    lastPingTime = Date.now();
+    socket.emit("ping_request", { t: lastPingTime });
+  }, 2000);
+  socket.on("ping_response", (data) => {
+    const rtt = Date.now() - (data?.t || lastPingTime);
+    if (rtt >= 0 && rtt < 5000) {
+      socket.data.ping = rtt;
+      // Aktualizuj ping i v Game state pokud je hrac v mistnosti
+      const roomId = socketRoom.get(socket.id);
+      const room = rooms.get(roomId);
+      if (room) {
+        const p = room.game.players.get(socket.id);
+        if (p) p.ping = rtt;
+      }
+    }
+  });
+  socket.on("disconnect", () => clearInterval(pingInterval));
 
   socket.on("hello", (data, ack) => {
     playerName = (data?.name || "Player").toString().slice(0, 16);

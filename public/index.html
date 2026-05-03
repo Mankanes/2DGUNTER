@@ -229,6 +229,34 @@
             <input id="game-chat-input" type="text" maxlength="100" placeholder="Press Z to chat, Enter to send, Esc to cancel" />
           </div>
         </div>
+
+        <!-- Rozsirena tabulka (Tab pro zobrazeni) -->
+        <div id="tab-scoreboard" class="tab-scoreboard">
+          <div class="tab-header">
+            <h2>SCOREBOARD</h2>
+            <div class="tab-meta">
+              <span class="tab-round-info" id="tab-round-info">Round 1</span>
+              <span class="tab-map-info" id="tab-map-info">Skybridge</span>
+            </div>
+          </div>
+          <table class="tab-table">
+            <thead>
+              <tr>
+                <th></th>
+                <th>Player</th>
+                <th>Wins</th>
+                <th>Kills</th>
+                <th>Deaths</th>
+                <th>K/D</th>
+                <th>Ping</th>
+              </tr>
+            </thead>
+            <tbody id="tab-tbody"></tbody>
+          </table>
+          <div class="tab-footer">
+            Hold <kbd>TAB</kbd> to view
+          </div>
+        </div>
       </div>
     </div>
   </div>

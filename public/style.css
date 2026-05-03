@@ -562,7 +562,7 @@ kbd {
 .btn-settings {
   position: fixed;
   top: 16px;
-  right: 16px;
+  left: 16px;
   width: 44px;
   height: 44px;
   border-radius: 8px;
@@ -823,4 +823,127 @@ kbd {
   background: rgba(255, 215, 0, 0.06);
   border-left: 3px solid #ffd700;
   padding-left: 6px;
+}
+
+/* ======================= TAB SCOREBOARD ======================= */
+.tab-scoreboard {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(10, 14, 26, 0.96);
+  border: 2px solid #2a3a5a;
+  border-radius: 14px;
+  padding: 24px 28px;
+  min-width: 600px;
+  max-width: 90vw;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.7);
+  display: none;
+  pointer-events: none;
+  z-index: 500;
+  animation: tabFadeIn 0.15s ease-out;
+}
+.tab-scoreboard.active { display: block; }
+
+@keyframes tabFadeIn {
+  from { opacity: 0; transform: translate(-50%, -48%); }
+  to { opacity: 1; transform: translate(-50%, -50%); }
+}
+
+.tab-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #2a3a5a;
+}
+.tab-header h2 {
+  font-size: 22px;
+  letter-spacing: 4px;
+  color: #ffe66d;
+  font-weight: 900;
+}
+.tab-meta {
+  display: flex;
+  gap: 18px;
+  font-size: 13px;
+  color: #94a3c4;
+}
+.tab-meta .tab-round-info {
+  color: #ffe66d;
+  font-weight: 700;
+}
+
+.tab-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.tab-table th {
+  text-align: left;
+  padding: 8px 10px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: #94a3c4;
+  border-bottom: 1px solid #2a3a5a;
+  font-weight: 700;
+}
+.tab-table th:nth-child(3),
+.tab-table th:nth-child(4),
+.tab-table th:nth-child(5),
+.tab-table th:nth-child(6),
+.tab-table th:nth-child(7) {
+  text-align: center;
+  width: 70px;
+}
+.tab-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #1e2a44;
+}
+.tab-table td:nth-child(3),
+.tab-table td:nth-child(4),
+.tab-table td:nth-child(5),
+.tab-table td:nth-child(6),
+.tab-table td:nth-child(7) {
+  text-align: center;
+  font-family: monospace;
+  font-weight: 700;
+}
+.tab-table tr.dead td {
+  opacity: 0.4;
+}
+.tab-table tr.self {
+  background: rgba(255, 230, 109, 0.08);
+}
+.tab-table .tab-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  display: inline-block;
+}
+.tab-table .tab-name {
+  font-weight: 700;
+  color: #fff;
+}
+.tab-table .tab-name.admin {
+  color: #ffd700;
+}
+.tab-table .tab-wins {
+  color: #ffe66d;
+}
+.tab-table .tab-kd-good { color: #4ade80; }
+.tab-table .tab-kd-mid  { color: #facc15; }
+.tab-table .tab-kd-bad  { color: #ef4444; }
+.tab-table .tab-ping-good { color: #4ade80; }
+.tab-table .tab-ping-mid  { color: #facc15; }
+.tab-table .tab-ping-bad  { color: #ef4444; }
+
+.tab-footer {
+  margin-top: 16px;
+  text-align: center;
+  font-size: 11px;
+  color: #5a6a90;
+  letter-spacing: 1px;
 }
