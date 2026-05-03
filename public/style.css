@@ -1696,3 +1696,46 @@ body.has-touch .minimap {
 .toggle-btn.active .toggle-hint {
   color: rgba(255, 94, 61, 0.7);
 }
+
+/* ======================= COLOR PICKER V LOBBY ======================= */
+.color-picker {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.color-swatch-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  border: 3px solid transparent;
+  cursor: pointer;
+  transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+  position: relative;
+  padding: 0;
+  outline: none;
+}
+.color-swatch-btn:hover:not(:disabled) {
+  transform: scale(1.08);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+.color-swatch-btn.selected {
+  border-color: #fff;
+  box-shadow: 0 0 12px rgba(255, 230, 109, 0.5);
+  transform: scale(1.05);
+}
+.color-swatch-btn.taken {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+.color-swatch-btn.taken::after {
+  content: "✕";
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 900;
+  color: rgba(0, 0, 0, 0.7);
+  pointer-events: none;
+}

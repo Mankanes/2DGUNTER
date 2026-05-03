@@ -198,11 +198,14 @@ class Game {
 
   addPlayer(socketId, name, isBot = false) {
     if (this.players.size >= SHARED.ROUND.MAX_PLAYERS) return null;
-    const colorIndex = this.players.size;
+    // Najdi prvni nepouzitou barvu
+    const usedColors = new Set();
+    for (const p of this.players.values()) usedColors.add(p.color);
+    let color = SHARED.COLORS.find((c) => !usedColors.has(c)) || SHARED.COLORS[0];
     const player = {
       id: socketId,
       name: (name || "Player").slice(0, 16),
-      color: SHARED.COLORS[colorIndex % SHARED.COLORS.length],
+      color,
       x: 200, y: 200, vx: 0, vy: 0,
       facing: 1, onGround: false,
       jumpsLeft: SHARED.PLAYER.MAX_JUMPS,
@@ -240,6 +243,22 @@ class Game {
         }
       }
     }
+  }
+
+  // Hrac si vybere barvu - jen v lobby, jen pokud neni jiz pouzita
+  setColor(socketId, color) {
+    if (this.phase !== "lobby") return false;
+    if (!SHARED.COLORS.includes(color)) return false;
+    const p = this.players.get(socketId);
+    if (!p) return false;
+    // Zkontroluj jestli barva neni pouzita jinym hracem
+    for (const other of this.players.values()) {
+      if (other.id !== socketId && other.color === color) {
+        return false; // barva pouzita
+      }
+    }
+    p.color = color;
+    return true;
   }
 
   // Host muze zmenit nastaveni matche - jen v lobby
@@ -304,12 +323,49 @@ class Game {
     this.events.push({ type: "round_start", round: this.roundNumber });
     this.loadMap(this.mapKey);
 
+    // Nahodne preusporadame spawny (Fisher-Yates shuffle)
     const spawns = this.map.spawns.slice();
-    let i = 0;
+    for (let j = spawns.length - 1; j > 0; j--) {
+      const k = Math.floor(Math.random() * (j + 1));
+      [spawns[j], spawns[k]] = [spawns[k], spawns[j]];
+    }
+
+    // Pridelime spawny tak aby nikdo nebyl blizko jineho hrace
+    const MIN_DIST = 250; // minimalni vzdalenost mezi hraci
+    const usedSpawns = []; // pole pridelenych pozic
+
     for (const p of this.players.values()) {
-      const s = spawns[i % spawns.length];
-      i++;
-      p.x = s.x; p.y = s.y;
+      // Najdi nejlepsi spawn - ten ktery je nejdal od vsech jiz pridelenych
+      let bestSpawn = null;
+      let bestMinDist = -1;
+      for (const s of spawns) {
+        // Spocitej nejmensi vzdalenost od jiz pouzitych spawnu
+        let minDist = Infinity;
+        for (const u of usedSpawns) {
+          const d = Math.hypot(s.x - u.x, s.y - u.y);
+          if (d < minDist) minDist = d;
+        }
+        if (usedSpawns.length === 0) minDist = Infinity;
+        // Pokud najdeme spawn s minimalni vzdalenosti vetsi nez bestMinDist, vezmeme
+        if (minDist > bestMinDist) {
+          bestMinDist = minDist;
+          bestSpawn = s;
+        }
+      }
+      // Pokud zadne misto neni dost daleko, vezmeme jakekoli (random)
+      if (!bestSpawn || (bestMinDist < MIN_DIST && usedSpawns.length < spawns.length)) {
+        // Najdi prvni spawn ktery jeste nebyl pouzity
+        for (const s of spawns) {
+          if (!usedSpawns.includes(s)) {
+            bestSpawn = s;
+            break;
+          }
+        }
+        if (!bestSpawn) bestSpawn = spawns[0]; // fallback
+      }
+
+      usedSpawns.push(bestSpawn);
+      p.x = bestSpawn.x; p.y = bestSpawn.y;
       p.vx = 0; p.vy = 0;
       p.knockbackVx = 0; p.knockbackVy = 0;
       p.hp = SHARED.PLAYER.MAX_HEALTH;
@@ -1058,6 +1114,16 @@ io.on("connection", (socket) => {
     const room = rooms.get(roomId);
     if (!room) return;
     if (room.game.setMatchSettings(socket.id, data || {})) {
+      io.to(roomId).emit("room_info", roomInfo(room));
+    }
+  });
+
+  // Hrac si vybere barvu
+  socket.on("set_color", (data) => {
+    const roomId = socketRoom.get(socket.id);
+    const room = rooms.get(roomId);
+    if (!room) return;
+    if (room.game.setColor(socket.id, data?.color)) {
       io.to(roomId).emit("room_info", roomInfo(room));
     }
   });

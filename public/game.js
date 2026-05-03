@@ -143,8 +143,31 @@
   const lobbyMapEl = document.getElementById("lobby-map");
   const winButtonsEl = document.getElementById("win-buttons");
   const phoneOnlyToggle = document.getElementById("phone-only-toggle");
+  const colorPickerEl = document.getElementById("color-picker");
   let isReady = false;
   let currentHostId = null;
+
+  // Vybudovat color picker - bude prepsano az pridem SHARED.COLORS
+  function buildColorPicker(colors, myColor, takenColors) {
+    if (!colorPickerEl || !colors) return;
+    colorPickerEl.innerHTML = "";
+    for (const c of colors) {
+      const btn = document.createElement("button");
+      btn.className = "color-swatch-btn";
+      if (c === myColor) btn.classList.add("selected");
+      if (takenColors.has(c) && c !== myColor) {
+        btn.classList.add("taken");
+        btn.disabled = true;
+      }
+      btn.style.background = c;
+      btn.title = c;
+      btn.onclick = () => {
+        if (btn.disabled) return;
+        socket.emit("set_color", { color: c });
+      };
+      colorPickerEl.appendChild(btn);
+    }
+  }
 
   document.getElementById("btn-leave").onclick = () => {
     socket.emit("leave_room");
@@ -188,6 +211,13 @@
     currentHostId = info.hostId;
     const isHost = info.hostId === selfId;
     lobbyMapEl.disabled = !isHost;
+
+    // Color picker - vybuduj podle aktualnich barev hracu
+    if (SHARED && SHARED.COLORS) {
+      const me = info.players.find((p) => p.id === selfId);
+      const takenColors = new Set(info.players.map((p) => p.color));
+      buildColorPicker(SHARED.COLORS, me?.color, takenColors);
+    }
 
     // Update win buttons
     if (info.matchSettings) {
