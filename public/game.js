@@ -790,59 +790,198 @@
     document.body.classList.add("has-touch");
   }
 
-  // Aim joystick - pri tahnuti se nastavi aimX/aimY a strilet
-  const joystick = {
+  // ---------- AIM JOYSTICK (prava strana - mireni a strelba) ----------
+  const aimJoy = {
     active: false,
     aimX: 1,
     aimY: 0,
+    activeTouchId: null,
   };
-  const joystickEl = document.getElementById("aim-joystick");
-  const joystickStickEl = document.getElementById("aim-joystick-stick");
+  const aimJoyEl = document.getElementById("aim-joystick");
+  const aimJoyStickEl = document.getElementById("aim-joystick-stick");
 
-  function joystickStart(e) {
-    e.preventDefault();
-    joystick.active = true;
-    joystickEl.classList.add("active");
-    input.shoot = true;
-    joystickMove(e);
+  function getTouchById(touches, id) {
+    for (let i = 0; i < touches.length; i++) {
+      if (touches[i].identifier === id) return touches[i];
+    }
+    return null;
   }
-  function joystickMove(e) {
-    if (!joystick.active) return;
+
+  function aimJoyStart(e) {
     e.preventDefault();
-    const rect = joystickEl.getBoundingClientRect();
+    e.stopPropagation();
+    if (aimJoy.active) return;
+    aimJoy.active = true;
+    if (e.touches && e.changedTouches && e.changedTouches.length) {
+      aimJoy.activeTouchId = e.changedTouches[0].identifier;
+    } else {
+      aimJoy.activeTouchId = null;
+    }
+    aimJoyEl.classList.add("active");
+    input.shoot = true;
+    aimJoyMove(e);
+  }
+  function aimJoyMove(e) {
+    if (!aimJoy.active) return;
+    e.preventDefault();
+    let touch;
+    if (e.touches) {
+      touch = aimJoy.activeTouchId !== null
+        ? getTouchById(e.touches, aimJoy.activeTouchId)
+        : e.touches[0];
+      if (!touch) return;
+    } else {
+      touch = e;
+    }
+    const rect = aimJoyEl.getBoundingClientRect();
     const cx = rect.left + rect.width / 2;
     const cy = rect.top + rect.height / 2;
-    const touch = e.touches ? e.touches[0] : e;
     const dx = touch.clientX - cx;
     const dy = touch.clientY - cy;
     const dist = Math.hypot(dx, dy) || 1;
-    // Normalizovany smer
-    joystick.aimX = dx / dist;
-    joystick.aimY = dy / dist;
-    // Vizualne posuvame stick (omezene na polomeru)
+    aimJoy.aimX = dx / dist;
+    aimJoy.aimY = dy / dist;
     const maxR = rect.width / 2 - 20;
     const useDist = Math.min(dist, maxR);
     const sx = (dx / dist) * useDist;
     const sy = (dy / dist) * useDist;
-    joystickStickEl.style.transform = `translate(${sx}px, ${sy}px)`;
+    aimJoyStickEl.style.transform = `translate(${sx}px, ${sy}px)`;
   }
-  function joystickEnd(e) {
-    if (!joystick.active) return;
+  function aimJoyEnd(e) {
+    if (!aimJoy.active) return;
+    // Pokud je touchend a aktivni dotyk skoncil, zavri
+    if (e.changedTouches && aimJoy.activeTouchId !== null) {
+      let foundActive = false;
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        if (e.changedTouches[i].identifier === aimJoy.activeTouchId) {
+          foundActive = true;
+          break;
+        }
+      }
+      if (!foundActive) return;
+    }
     e.preventDefault();
-    joystick.active = false;
-    joystickEl.classList.remove("active");
+    aimJoy.active = false;
+    aimJoy.activeTouchId = null;
+    aimJoyEl.classList.remove("active");
     input.shoot = false;
-    joystickStickEl.style.transform = "translate(0, 0)";
+    aimJoyStickEl.style.transform = "translate(0, 0)";
   }
 
-  joystickEl.addEventListener("touchstart", joystickStart, { passive: false });
-  joystickEl.addEventListener("touchmove", joystickMove, { passive: false });
-  joystickEl.addEventListener("touchend", joystickEnd, { passive: false });
-  joystickEl.addEventListener("touchcancel", joystickEnd, { passive: false });
-  // Pro desktop testovani taky podporujeme mys
-  joystickEl.addEventListener("mousedown", joystickStart);
-  document.addEventListener("mousemove", (e) => { if (joystick.active) joystickMove(e); });
-  document.addEventListener("mouseup", (e) => { if (joystick.active) joystickEnd(e); });
+  aimJoyEl.addEventListener("touchstart", aimJoyStart, { passive: false });
+  aimJoyEl.addEventListener("touchmove", aimJoyMove, { passive: false });
+  aimJoyEl.addEventListener("touchend", aimJoyEnd, { passive: false });
+  aimJoyEl.addEventListener("touchcancel", aimJoyEnd, { passive: false });
+  // Pro desktop testovani taky mys
+  aimJoyEl.addEventListener("mousedown", aimJoyStart);
+  document.addEventListener("mousemove", (e) => { if (aimJoy.active && !e.touches) aimJoyMove(e); });
+  document.addEventListener("mouseup", (e) => { if (aimJoy.active && !e.touches) aimJoyEnd(e); });
+
+  // Zachovani zpetne kompatibility - stary nazev
+  const joystick = aimJoy;
+
+  // ---------- POHYBOVY JOYSTICK (leva strana - pohyb) ----------
+  const moveJoy = {
+    active: false,
+    activeTouchId: null,
+  };
+  const moveJoyEl = document.getElementById("move-joystick");
+  const moveJoyStickEl = document.getElementById("move-joystick-stick");
+
+  function moveJoyStart(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (moveJoy.active) return;
+    moveJoy.active = true;
+    if (e.touches && e.changedTouches && e.changedTouches.length) {
+      moveJoy.activeTouchId = e.changedTouches[0].identifier;
+    } else {
+      moveJoy.activeTouchId = null;
+    }
+    moveJoyEl.classList.add("active");
+    moveJoyMove(e);
+  }
+  function moveJoyMove(e) {
+    if (!moveJoy.active) return;
+    e.preventDefault();
+    let touch;
+    if (e.touches) {
+      touch = moveJoy.activeTouchId !== null
+        ? getTouchById(e.touches, moveJoy.activeTouchId)
+        : e.touches[0];
+      if (!touch) return;
+    } else {
+      touch = e;
+    }
+    const rect = moveJoyEl.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const dx = touch.clientX - cx;
+    const dy = touch.clientY - cy;
+    const dist = Math.hypot(dx, dy) || 1;
+
+    // Mrtva zona uprostred (ignore mali pohyby)
+    const deadZone = 12;
+    if (dist < deadZone) {
+      input.left = false;
+      input.right = false;
+    } else {
+      // Pohyb podle X osy
+      input.left = dx < -deadZone * 0.5;
+      input.right = dx > deadZone * 0.5;
+    }
+
+    // Skok: kdyz taha vyrazne nahoru (dy zaporne, vetsi nez X) - edge triggered
+    // pro double jump musi pustit a pretazit nahoru znovu
+    const jumpThreshold = 30;
+    const wantsJump = dy < -jumpThreshold && Math.abs(dy) > Math.abs(dx) * 0.6;
+    if (wantsJump && !moveJoy.lastUpState) {
+      input.jump = true;
+      moveJoy.lastUpState = true;
+    } else if (!wantsJump) {
+      input.jump = false;
+      moveJoy.lastUpState = false;
+    }
+
+    // Vizualni stick
+    const maxR = rect.width / 2 - 18;
+    const useDist = Math.min(dist, maxR);
+    const sx = (dx / dist) * useDist;
+    const sy = (dy / dist) * useDist;
+    moveJoyStickEl.style.transform = `translate(${sx}px, ${sy}px)`;
+  }
+  function moveJoyEnd(e) {
+    if (!moveJoy.active) return;
+    if (e.changedTouches && moveJoy.activeTouchId !== null) {
+      let foundActive = false;
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        if (e.changedTouches[i].identifier === moveJoy.activeTouchId) {
+          foundActive = true;
+          break;
+        }
+      }
+      if (!foundActive) return;
+    }
+    e.preventDefault();
+    moveJoy.active = false;
+    moveJoy.activeTouchId = null;
+    moveJoy.lastUpState = false;
+    moveJoyEl.classList.remove("active");
+    input.left = false;
+    input.right = false;
+    input.jump = false;
+    moveJoyStickEl.style.transform = "translate(0, 0)";
+  }
+
+  if (moveJoyEl) {
+    moveJoyEl.addEventListener("touchstart", moveJoyStart, { passive: false });
+    moveJoyEl.addEventListener("touchmove", moveJoyMove, { passive: false });
+    moveJoyEl.addEventListener("touchend", moveJoyEnd, { passive: false });
+    moveJoyEl.addEventListener("touchcancel", moveJoyEnd, { passive: false });
+    moveJoyEl.addEventListener("mousedown", moveJoyStart);
+    document.addEventListener("mousemove", (e) => { if (moveJoy.active && !e.touches) moveJoyMove(e); });
+    document.addEventListener("mouseup", (e) => { if (moveJoy.active && !e.touches) moveJoyEnd(e); });
+  }
 
   // Tlacitka pohybu (left, right, jump)
   document.querySelectorAll(".mbtn[data-action]").forEach((btn) => {
@@ -1282,9 +1421,35 @@
     const ch = canvasCssHeight();
     const sx = cw / ww;
     const sy = ch / wh;
-    const scale = Math.min(sx, sy);
-    const x = (ww - cw / scale) / 2;
-    const y = (wh - ch / scale) / 2;
+    let scale = Math.min(sx, sy);
+
+    // Na mobilu zoomneme blize - klasicky "fit-to-screen" je moc daleko
+    // Faktor 1.7 = 70% blize. Pak ale musime sledovat hrace ze pouze nezacne videt vychodni okraj.
+    const isTouch = ("ontouchstart" in window) || navigator.maxTouchPoints > 0;
+    if (isTouch) {
+      scale *= 1.7;
+    }
+
+    // Standardni "fit" pozice (vystredovany svet)
+    let x = (ww - cw / scale) / 2;
+    let y = (wh - ch / scale) / 2;
+
+    // Pokud kamera vidi vyrez mensi nez svet, sleduj hrace
+    const visibleW = cw / scale;
+    const visibleH = ch / scale;
+    if (visibleW < ww || visibleH < wh) {
+      // Sleduj sebe (nebo prostredek mapy pokud nemame self)
+      const self = snapshots.length ? snapshots[snapshots.length - 1].players.find((p) => p.id === selfId) : null;
+      if (self) {
+        const PL = SHARED.PLAYER;
+        const targetX = self.x + PL.WIDTH / 2 - visibleW / 2;
+        const targetY = self.y + PL.HEIGHT / 2 - visibleH / 2;
+        // Smooth follow s clamp na hranice mapy
+        x = Math.max(0, Math.min(ww - visibleW, targetX));
+        y = Math.max(0, Math.min(wh - visibleH, targetY));
+      }
+    }
+
     return { x, y, scale };
   }
 

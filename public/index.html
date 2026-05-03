@@ -235,14 +235,12 @@
 
         <!-- MOBILNI OVLADANI - skrytý na desktopu, viditelný na mobilu -->
         <div id="mobile-controls" class="mobile-controls">
-          <!-- Leva strana: pohyb (jump nahore, arrows pod) -->
+          <!-- Leva strana: pohybovy joystick (nahoru = skok) -->
           <div class="mobile-left">
-            <div class="mobile-jump-row">
-              <button class="mbtn mbtn-jump" data-action="jump">⤒</button>
-            </div>
-            <div class="mobile-arrow-row">
-              <button class="mbtn mbtn-left" data-action="left">◀</button>
-              <button class="mbtn mbtn-right" data-action="right">▶</button>
+            <div class="move-joystick" id="move-joystick">
+              <div class="move-joystick-base"></div>
+              <div class="move-joystick-stick" id="move-joystick-stick"></div>
+              <div class="move-joystick-hint">MOVE / JUMP ↑</div>
             </div>
           </div>
 

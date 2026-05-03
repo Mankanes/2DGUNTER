@@ -1444,3 +1444,69 @@ body.has-touch .aim-joystick-hint {
   font-size: 9px;
   bottom: -16px;
 }
+
+
+/* ======================= POHYBOVY JOYSTICK (LEVA STRANA) ======================= */
+.move-joystick {
+  width: 140px;
+  height: 140px;
+  position: relative;
+  touch-action: none;
+}
+.move-joystick-base {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: rgba(20, 26, 44, 0.5);
+  border: 3px solid #2a3a5a;
+}
+.move-joystick.active .move-joystick-base {
+  border-color: #ffe66d;
+  background: rgba(255, 230, 109, 0.15);
+}
+.move-joystick-stick {
+  position: absolute;
+  width: 56px;
+  height: 56px;
+  top: 50%;
+  left: 50%;
+  margin-top: -28px;
+  margin-left: -28px;
+  border-radius: 50%;
+  background: rgba(255, 230, 109, 0.7);
+  border: 3px solid #ffe66d;
+  pointer-events: none;
+}
+.move-joystick.active .move-joystick-stick {
+  background: rgba(255, 230, 109, 0.9);
+}
+.move-joystick-hint {
+  position: absolute;
+  bottom: -20px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  color: #94a3c4;
+  pointer-events: none;
+}
+.move-joystick.active .move-joystick-hint {
+  color: #ffe66d;
+}
+
+/* Levy panel - jump nahore, joystick pod nim, vystredene */
+body.has-touch .mobile-left {
+  align-items: center;
+  gap: 16px;
+}
+
+/* Mensi velikosti dle obrazovky */
+@media (max-width: 850px) and (orientation: landscape) {
+  body.has-touch .move-joystick { width: 120px; height: 120px; }
+  body.has-touch .move-joystick-stick { width: 48px; height: 48px; margin-top: -24px; margin-left: -24px; }
+}
+@media (max-width: 700px) and (orientation: landscape) {
+  body.has-touch .move-joystick { width: 105px; height: 105px; }
+  body.has-touch .move-joystick-stick { width: 42px; height: 42px; margin-top: -21px; margin-left: -21px; }
+}
