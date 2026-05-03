@@ -255,7 +255,7 @@ kbd {
   display: block;
   width: 100%;
   height: 100%;
-  cursor: crosshair;
+  cursor: none;          /* schovavame default kurzor - kreslime vlastni crosshair */
   image-rendering: pixelated;
 }
 
@@ -433,6 +433,7 @@ kbd {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  z-index: 100;
 }
 .game-chat-log {
   display: flex;
@@ -469,7 +470,8 @@ kbd {
   pointer-events: auto;
 }
 .game-chat-input-wrap.active {
-  display: block;
+  display: block !important;
+  pointer-events: auto;
 }
 .game-chat-input-wrap input {
   width: 100%;
@@ -480,6 +482,7 @@ kbd {
   color: #fff;
   font-size: 14px;
   outline: none;
+  pointer-events: auto;
 }
 
 /* ======================= KONZOLE (CS-like) ======================= */
@@ -554,3 +557,252 @@ kbd {
   font-size: 14px;
 }
 #console-input::placeholder { color: #5a6a90; }
+
+/* ======================= SETTINGS BUTTON ======================= */
+.btn-settings {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  background: rgba(20, 26, 44, 0.85);
+  border: 2px solid #2a3a5a;
+  color: #94a3c4;
+  font-size: 22px;
+  cursor: pointer;
+  z-index: 1000;
+  transition: transform 0.15s, color 0.15s, border-color 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.btn-settings:hover {
+  color: #ffe66d;
+  border-color: #ffe66d;
+  transform: rotate(90deg);
+}
+
+/* ======================= MODAL ======================= */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+.modal-overlay.active { display: flex; }
+
+.modal-card {
+  background: rgba(20, 26, 44, 0.98);
+  border: 2px solid #2a3a5a;
+  border-radius: 14px;
+  padding: 24px;
+  width: 600px;
+  max-width: 92vw;
+  max-height: 88vh;
+  overflow-y: auto;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.7);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #2a3a5a;
+}
+.modal-header h2 {
+  font-size: 24px;
+  letter-spacing: 4px;
+  color: #ffe66d;
+  font-weight: 900;
+}
+.modal-close {
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  border: none;
+  color: #94a3c4;
+  font-size: 26px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: color 0.15s, background 0.15s;
+}
+.modal-close:hover {
+  color: #ff5e3d;
+  background: rgba(255, 94, 61, 0.1);
+}
+
+.settings-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid #2a3a5a;
+  padding-bottom: 0;
+}
+.settings-tab {
+  background: transparent;
+  border: none;
+  color: #94a3c4;
+  padding: 10px 18px;
+  font-size: 13px;
+  letter-spacing: 1.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -1px;
+  transition: color 0.15s, border-color 0.15s;
+}
+.settings-tab:hover { color: #fff; }
+.settings-tab.active {
+  color: #ffe66d;
+  border-bottom-color: #ffe66d;
+}
+
+.settings-tab-content {
+  display: none;
+}
+.settings-tab-content.active {
+  display: block;
+}
+
+/* ======================= KEYBINDS ======================= */
+.keybinds-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.keybind-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #0e1424;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid #2a3a5a;
+}
+.keybind-label {
+  font-size: 14px;
+  color: #c8d4e8;
+}
+.keybind-btn {
+  min-width: 100px;
+  padding: 8px 14px;
+  background: #1a2240;
+  border: 2px solid #2a3a5a;
+  color: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: monospace;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  transition: all 0.15s;
+}
+.keybind-btn:hover {
+  border-color: #54e0ff;
+  color: #54e0ff;
+}
+.keybind-btn.listening {
+  background: #ff5e3d;
+  border-color: #ff5e3d;
+  color: #fff;
+  animation: keybindPulse 0.8s ease-in-out infinite;
+}
+@keyframes keybindPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+/* ======================= CROSSHAIR EDITOR ======================= */
+.crosshair-editor {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 24px;
+}
+.crosshair-preview-wrap {
+  background:
+    radial-gradient(ellipse at center, #2a3a5a 0%, #0e1424 100%);
+  border: 2px solid #2a3a5a;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: fit-content;
+  padding: 0;
+}
+#crosshair-preview {
+  display: block;
+}
+
+.crosshair-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ctrl-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ctrl-row label {
+  font-size: 12px;
+  color: #94a3c4;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ctrl-row label span {
+  color: #ffe66d;
+  font-weight: 700;
+  font-family: monospace;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.ctrl-row input[type="range"] {
+  width: 100%;
+  accent-color: #ffe66d;
+}
+.ctrl-row input[type="color"] {
+  width: 100%;
+  height: 36px;
+  background: transparent;
+  border: 2px solid #2a3a5a;
+  border-radius: 6px;
+  cursor: pointer;
+  padding: 2px;
+}
+.ctrl-row input[type="checkbox"] {
+  accent-color: #ffe66d;
+  width: 16px;
+  height: 16px;
+}
+.ctrl-row select {
+  padding: 8px 12px;
+  background: #0e1424;
+  border: 2px solid #2a3a5a;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 14px;
+  outline: none;
+  cursor: pointer;
+}
+.ctrl-row select:focus { border-color: #54e0ff; }
+
+@media (max-width: 600px) {
+  .crosshair-editor {
+    grid-template-columns: 1fr;
+  }
+  .crosshair-preview-wrap {
+    margin: 0 auto;
+  }
+}

@@ -135,6 +135,279 @@
     }
   });
 
+  // ---------- SETTINGS UI ----------
+  const settingsModal = document.getElementById("settings-modal");
+  const btnOpenSettings = document.getElementById("btn-open-settings");
+  const btnCloseSettings = document.getElementById("btn-close-settings");
+  let isListeningForKey = false; // true kdyz uzivatel meni keybind
+  let listeningButton = null;
+
+  function openSettings() {
+    settingsModal.classList.add("active");
+    refreshKeybindsUI();
+    refreshCrosshairUI();
+    drawCrosshairPreview();
+  }
+  function closeSettings() {
+    settingsModal.classList.remove("active");
+    if (listeningButton) {
+      listeningButton.classList.remove("listening");
+      listeningButton = null;
+      isListeningForKey = false;
+    }
+  }
+  btnOpenSettings.onclick = openSettings;
+  btnCloseSettings.onclick = closeSettings;
+  // Klik mimo modal zavre
+  settingsModal.addEventListener("click", (e) => {
+    if (e.target === settingsModal) closeSettings();
+  });
+
+  // Tab prepinani
+  document.querySelectorAll(".settings-tab").forEach((tab) => {
+    tab.onclick = () => {
+      document.querySelectorAll(".settings-tab").forEach((t) => t.classList.remove("active"));
+      document.querySelectorAll(".settings-tab-content").forEach((c) => c.classList.remove("active"));
+      tab.classList.add("active");
+      const tabName = tab.getAttribute("data-tab");
+      document.querySelector(`.settings-tab-content[data-tab="${tabName}"]`).classList.add("active");
+      if (tabName === "crosshair") drawCrosshairPreview();
+    };
+  });
+
+  // Keybinds UI
+  function refreshKeybindsUI() {
+    document.querySelectorAll(".keybind-btn").forEach((btn) => {
+      const action = btn.getAttribute("data-action");
+      btn.textContent = displayKey(settings.keybinds[action]);
+    });
+  }
+  function displayKey(k) {
+    if (!k) return "—";
+    if (k === " ") return "Space";
+    if (k === "`") return "~";
+    return k.length === 1 ? k.toUpperCase() : k;
+  }
+
+  document.querySelectorAll(".keybind-btn").forEach((btn) => {
+    btn.onclick = () => {
+      // Pokud uz nejaka jina poslucha, zrus
+      if (listeningButton) {
+        listeningButton.classList.remove("listening");
+      }
+      listeningButton = btn;
+      isListeningForKey = true;
+      btn.classList.add("listening");
+      btn.textContent = "Press a key...";
+    };
+  });
+
+  // Globalni listener pro keybind capture (mimo herni input)
+  document.addEventListener("keydown", (e) => {
+    if (!isListeningForKey || !listeningButton) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (e.key === "Escape") {
+      // Zruseni
+      listeningButton.classList.remove("listening");
+      refreshKeybindsUI();
+      listeningButton = null;
+      isListeningForKey = false;
+      return;
+    }
+
+    let keyToBind = e.key.toLowerCase();
+    if (keyToBind === " ") keyToBind = " ";
+    const action = listeningButton.getAttribute("data-action");
+
+    // Pokud je klavesa uz pouzita, vymen ji
+    for (const otherAction in settings.keybinds) {
+      if (otherAction !== action && settings.keybinds[otherAction] === keyToBind) {
+        // Druhe akci dame puvodni klavesu prvni
+        settings.keybinds[otherAction] = settings.keybinds[action];
+      }
+    }
+    settings.keybinds[action] = keyToBind;
+    saveKeybinds();
+    refreshKeybindsUI();
+    listeningButton.classList.remove("listening");
+    listeningButton = null;
+    isListeningForKey = false;
+  }, true); // capture phase aby chytal pred ostatnimi
+
+  document.getElementById("btn-reset-keybinds").onclick = () => {
+    settings.keybinds = { ...DEFAULT_KEYBINDS };
+    saveKeybinds();
+    refreshKeybindsUI();
+  };
+
+  // Crosshair UI
+  const chCanvas = document.getElementById("crosshair-preview");
+  const chCtx = chCanvas.getContext("2d");
+  const chControls = {
+    style: document.getElementById("ch-style"),
+    color: document.getElementById("ch-color"),
+    size: document.getElementById("ch-size"),
+    sizeVal: document.getElementById("ch-size-val"),
+    gap: document.getElementById("ch-gap"),
+    gapVal: document.getElementById("ch-gap-val"),
+    thickness: document.getElementById("ch-thickness"),
+    thicknessVal: document.getElementById("ch-thickness-val"),
+    dot: document.getElementById("ch-dot"),
+    outline: document.getElementById("ch-outline"),
+    outlineOpacity: document.getElementById("ch-outline-opacity"),
+    outlineOpacityVal: document.getElementById("ch-outline-opacity-val"),
+  };
+
+  function refreshCrosshairUI() {
+    chControls.style.value = settings.crosshair.style;
+    chControls.color.value = settings.crosshair.color;
+    chControls.size.value = settings.crosshair.size;
+    chControls.sizeVal.textContent = settings.crosshair.size;
+    chControls.gap.value = settings.crosshair.gap;
+    chControls.gapVal.textContent = settings.crosshair.gap;
+    chControls.thickness.value = settings.crosshair.thickness;
+    chControls.thicknessVal.textContent = settings.crosshair.thickness;
+    chControls.dot.checked = settings.crosshair.dot;
+    chControls.outline.checked = settings.crosshair.outline;
+    chControls.outlineOpacity.value = settings.crosshair.outlineOpacity;
+    chControls.outlineOpacityVal.textContent = settings.crosshair.outlineOpacity;
+  }
+
+  function bindCrosshairControls() {
+    chControls.style.onchange = () => { settings.crosshair.style = chControls.style.value; saveCrosshair(); drawCrosshairPreview(); };
+    chControls.color.oninput = () => { settings.crosshair.color = chControls.color.value; saveCrosshair(); drawCrosshairPreview(); };
+    chControls.size.oninput = () => {
+      settings.crosshair.size = parseInt(chControls.size.value);
+      chControls.sizeVal.textContent = settings.crosshair.size;
+      saveCrosshair(); drawCrosshairPreview();
+    };
+    chControls.gap.oninput = () => {
+      settings.crosshair.gap = parseInt(chControls.gap.value);
+      chControls.gapVal.textContent = settings.crosshair.gap;
+      saveCrosshair(); drawCrosshairPreview();
+    };
+    chControls.thickness.oninput = () => {
+      settings.crosshair.thickness = parseInt(chControls.thickness.value);
+      chControls.thicknessVal.textContent = settings.crosshair.thickness;
+      saveCrosshair(); drawCrosshairPreview();
+    };
+    chControls.dot.onchange = () => { settings.crosshair.dot = chControls.dot.checked; saveCrosshair(); drawCrosshairPreview(); };
+    chControls.outline.onchange = () => { settings.crosshair.outline = chControls.outline.checked; saveCrosshair(); drawCrosshairPreview(); };
+    chControls.outlineOpacity.oninput = () => {
+      settings.crosshair.outlineOpacity = parseInt(chControls.outlineOpacity.value);
+      chControls.outlineOpacityVal.textContent = settings.crosshair.outlineOpacity;
+      saveCrosshair(); drawCrosshairPreview();
+    };
+  }
+  bindCrosshairControls();
+
+  document.getElementById("btn-reset-crosshair").onclick = () => {
+    settings.crosshair = { ...DEFAULT_CROSSHAIR };
+    saveCrosshair();
+    refreshCrosshairUI();
+    drawCrosshairPreview();
+  };
+
+  // Vykreslovani crosshairu (sdilena funkce - pouziva se v preview i in-game)
+  function drawCrosshair(ctx, cx, cy) {
+    const c = settings.crosshair;
+    ctx.save();
+    ctx.lineCap = "butt";
+
+    // Outline (zakulacuje crosshair tmavym lemem pro citelnost)
+    if (c.outline) {
+      const outlineAlpha = c.outlineOpacity / 100;
+      ctx.strokeStyle = `rgba(0, 0, 0, ${outlineAlpha})`;
+      ctx.fillStyle = `rgba(0, 0, 0, ${outlineAlpha})`;
+      ctx.lineWidth = c.thickness + 2;
+      drawCrosshairShape(ctx, cx, cy, c, true);
+    }
+
+    // Hlavni crosshair
+    ctx.strokeStyle = c.color;
+    ctx.fillStyle = c.color;
+    ctx.lineWidth = c.thickness;
+    drawCrosshairShape(ctx, cx, cy, c, false);
+
+    ctx.restore();
+  }
+
+  function drawCrosshairShape(ctx, cx, cy, c, isOutline) {
+    const size = c.size;
+    const gap = c.gap;
+    const dotPad = isOutline ? 1 : 0;
+
+    if (c.style === "dot") {
+      // Jen tecka
+      const r = Math.max(1, c.thickness);
+      ctx.beginPath();
+      ctx.arc(cx, cy, r + dotPad, 0, Math.PI * 2);
+      ctx.fill();
+      return;
+    }
+
+    if (c.style === "circle") {
+      ctx.beginPath();
+      ctx.arc(cx, cy, size, 0, Math.PI * 2);
+      ctx.stroke();
+      if (c.dot) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, Math.max(1, c.thickness) + dotPad, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      return;
+    }
+
+    // CROSS nebo T-SHAPE
+    // Pro outline rozsirujeme cary o pixel na kazdou stranu
+    const off = isOutline ? 1 : 0;
+
+    // Horni
+    if (c.style !== "t-shape") {
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - gap - off);
+      ctx.lineTo(cx, cy - gap - size - off);
+      ctx.stroke();
+    }
+    // Dolni
+    ctx.beginPath();
+    ctx.moveTo(cx, cy + gap + off);
+    ctx.lineTo(cx, cy + gap + size + off);
+    ctx.stroke();
+    // Leva
+    ctx.beginPath();
+    ctx.moveTo(cx - gap - off, cy);
+    ctx.lineTo(cx - gap - size - off, cy);
+    ctx.stroke();
+    // Prava
+    ctx.beginPath();
+    ctx.moveTo(cx + gap + off, cy);
+    ctx.lineTo(cx + gap + size + off, cy);
+    ctx.stroke();
+
+    if (c.dot) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, Math.max(1, c.thickness) + dotPad, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  function drawCrosshairPreview() {
+    chCtx.clearRect(0, 0, chCanvas.width, chCanvas.height);
+    // Pozadi - tmavé s mírnym textur ax to vypadá jako herni scena
+    chCtx.fillStyle = "#1a2840";
+    chCtx.fillRect(0, 0, chCanvas.width, chCanvas.height);
+    // Jemne pruhy
+    chCtx.fillStyle = "rgba(255,255,255,0.03)";
+    for (let i = 0; i < 6; i++) {
+      chCtx.fillRect(0, i * 40, chCanvas.width, 20);
+    }
+    // Crosshair uprostred
+    drawCrosshair(chCtx, chCanvas.width / 2, chCanvas.height / 2);
+  }
+
   // ---------- KONZOLE (jako CS) ----------
   const consoleEl = document.getElementById("console");
   const consoleLog = document.getElementById("console-log");
@@ -332,49 +605,117 @@
     left: false, right: false, jump: false, shoot: false,
     aimX: 1, aimY: 0, switch: null,
   };
-  let mouseX = 0, mouseY = 0;
+  let mouseX = -1, mouseY = -1;
 
-  const keyMap = {
-    a: "left", arrowleft: "left",
-    d: "right", arrowright: "right",
-    w: "jump", arrowup: "jump", " ": "jump",
+  // ---------- SETTINGS (keybinds + crosshair) ----------
+  const DEFAULT_KEYBINDS = {
+    left: "a",
+    right: "d",
+    jump: "w",
+    weapon1: "1",
+    weapon2: "2",
+    weapon3: "3",
+    weapon4: "4",
+    chat: "z",
+    console: "`",
   };
+  const DEFAULT_CROSSHAIR = {
+    style: "cross",         // cross | dot | circle | t-shape
+    color: "#00ff00",
+    size: 8,
+    gap: 4,
+    thickness: 2,
+    dot: false,
+    outline: true,
+    outlineOpacity: 80,
+  };
+
+  const settings = {
+    keybinds: { ...DEFAULT_KEYBINDS },
+    crosshair: { ...DEFAULT_CROSSHAIR },
+  };
+
+  function loadSettings() {
+    try {
+      const kb = JSON.parse(localStorage.getItem("kf_keybinds") || "{}");
+      settings.keybinds = { ...DEFAULT_KEYBINDS, ...kb };
+    } catch (e) {}
+    try {
+      const ch = JSON.parse(localStorage.getItem("kf_crosshair") || "{}");
+      settings.crosshair = { ...DEFAULT_CROSSHAIR, ...ch };
+    } catch (e) {}
+  }
+  function saveKeybinds() {
+    localStorage.setItem("kf_keybinds", JSON.stringify(settings.keybinds));
+  }
+  function saveCrosshair() {
+    localStorage.setItem("kf_crosshair", JSON.stringify(settings.crosshair));
+  }
+  loadSettings();
+
+  // Vraci akci (jeden z DEFAULT_KEYBINDS klicu) podle stiskle klavesy
+  function actionForKey(key) {
+    const lower = (key || "").toLowerCase();
+    for (const action in settings.keybinds) {
+      if (settings.keybinds[action] === lower) return action;
+    }
+    return null;
+  }
 
   document.addEventListener("keydown", (e) => {
     // Pokud je konzole nebo chat otevreny, klavesy nezpracovavej
     if (isConsoleOpen || isChatOpen) return;
+    // Pokud je settings modal otevreny (a poslouchame klavesu pro keybind), nereaguj
+    if (isListeningForKey) return;
 
-    // ~ nebo ` otevre konzoli (kdykoliv - v menu, lobby, hre)
-    if (e.key === "`" || e.key === "~") {
+    const action = actionForKey(e.key);
+
+    // Konzole
+    if (action === "console" || e.key === "`" || e.key === "~") {
       openConsole();
       e.preventDefault();
       return;
     }
 
-    // Z otevre in-game chat (jen kdyz jsme ve hre)
-    if ((e.key === "z" || e.key === "Z") && screens.game.classList.contains("active")) {
+    // Chat (jen ve hre)
+    if (action === "chat" && screens.game.classList.contains("active")) {
       openGameChat();
       e.preventDefault();
       return;
     }
 
-    const k = e.key.toLowerCase();
-    if (keyMap[k]) {
-      input[keyMap[k]] = true;
+    if (action === "left" || action === "right" || action === "jump") {
+      input[action] = true;
       e.preventDefault();
     }
-    if (k === "1") input.switch = "pistol";
-    else if (k === "2") input.switch = "shotgun";
-    else if (k === "3") input.switch = "rocket";
-    else if (k === "4") input.switch = "laser";
+
+    // Specialni: Space a sipky vzdy fungujou jako alternativy (nelze prebindovat)
+    if (e.key === " " || e.key === "ArrowUp") {
+      input.jump = true;
+      e.preventDefault();
+    }
+    if (e.key === "ArrowLeft") { input.left = true; e.preventDefault(); }
+    if (e.key === "ArrowRight") { input.right = true; e.preventDefault(); }
+
+    // Zbrane
+    if (action === "weapon1") input.switch = "pistol";
+    else if (action === "weapon2") input.switch = "shotgun";
+    else if (action === "weapon3") input.switch = "rocket";
+    else if (action === "weapon4") input.switch = "laser";
   });
+
   document.addEventListener("keyup", (e) => {
     if (isConsoleOpen || isChatOpen) return;
-    const k = e.key.toLowerCase();
-    if (keyMap[k]) {
-      input[keyMap[k]] = false;
+    if (isListeningForKey) return;
+
+    const action = actionForKey(e.key);
+    if (action === "left" || action === "right" || action === "jump") {
+      input[action] = false;
       e.preventDefault();
     }
+    if (e.key === " " || e.key === "ArrowUp") { input.jump = false; e.preventDefault(); }
+    if (e.key === "ArrowLeft") { input.left = false; e.preventDefault(); }
+    if (e.key === "ArrowRight") { input.right = false; e.preventDefault(); }
   });
 
   const canvas = document.getElementById("canvas");
@@ -392,7 +733,10 @@
     if (e.button === 0) input.shoot = false;
   });
   canvas.addEventListener("contextmenu", (e) => e.preventDefault());
-  canvas.addEventListener("mouseleave", () => { input.shoot = false; });
+  canvas.addEventListener("mouseleave", () => {
+    input.shoot = false;
+    mouseX = -1; mouseY = -1; // schova crosshair
+  });
 
   setInterval(() => {
     if (!SHARED) return;
@@ -745,6 +1089,12 @@
     drawDeathZone();
 
     ctx.restore();
+
+    // Vlastni crosshair - kreslime v screen coords (po ctx.restore)
+    if (mouseX >= 0 && mouseY >= 0 &&
+        mouseX <= canvas.width && mouseY <= canvas.height) {
+      drawCrosshair(ctx, mouseX, mouseY);
+    }
   }
 
   function drawBackground(map) {

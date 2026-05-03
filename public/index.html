@@ -51,6 +51,129 @@
       </div>
     </div>
 
+    <!-- Settings tlacitko - vzdy viditelne v rohu -->
+    <button id="btn-open-settings" class="btn-settings" title="Settings">⚙</button>
+
+    <!-- Settings modal -->
+    <div id="settings-modal" class="modal-overlay">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h2>SETTINGS</h2>
+          <button id="btn-close-settings" class="modal-close">×</button>
+        </div>
+
+        <div class="settings-tabs">
+          <button class="settings-tab active" data-tab="keybinds">Keybinds</button>
+          <button class="settings-tab" data-tab="crosshair">Crosshair</button>
+        </div>
+
+        <!-- KEYBINDS TAB -->
+        <div class="settings-tab-content active" data-tab="keybinds">
+          <div class="keybinds-list">
+            <div class="keybind-row" data-action="left">
+              <span class="keybind-label">Move Left</span>
+              <button class="keybind-btn" data-action="left">A</button>
+            </div>
+            <div class="keybind-row" data-action="right">
+              <span class="keybind-label">Move Right</span>
+              <button class="keybind-btn" data-action="right">D</button>
+            </div>
+            <div class="keybind-row" data-action="jump">
+              <span class="keybind-label">Jump</span>
+              <button class="keybind-btn" data-action="jump">W</button>
+            </div>
+            <div class="keybind-row" data-action="weapon1">
+              <span class="keybind-label">Pistol</span>
+              <button class="keybind-btn" data-action="weapon1">1</button>
+            </div>
+            <div class="keybind-row" data-action="weapon2">
+              <span class="keybind-label">Shotgun</span>
+              <button class="keybind-btn" data-action="weapon2">2</button>
+            </div>
+            <div class="keybind-row" data-action="weapon3">
+              <span class="keybind-label">Rocket</span>
+              <button class="keybind-btn" data-action="weapon3">3</button>
+            </div>
+            <div class="keybind-row" data-action="weapon4">
+              <span class="keybind-label">Laser</span>
+              <button class="keybind-btn" data-action="weapon4">4</button>
+            </div>
+            <div class="keybind-row" data-action="chat">
+              <span class="keybind-label">Open Chat</span>
+              <button class="keybind-btn" data-action="chat">Z</button>
+            </div>
+            <div class="keybind-row" data-action="console">
+              <span class="keybind-label">Open Console</span>
+              <button class="keybind-btn" data-action="console">~</button>
+            </div>
+          </div>
+          <button id="btn-reset-keybinds" class="btn">Reset to defaults</button>
+        </div>
+
+        <!-- CROSSHAIR TAB -->
+        <div class="settings-tab-content" data-tab="crosshair">
+          <div class="crosshair-editor">
+            <div class="crosshair-preview-wrap">
+              <canvas id="crosshair-preview" width="240" height="240"></canvas>
+            </div>
+
+            <div class="crosshair-controls">
+              <div class="ctrl-row">
+                <label>Style</label>
+                <select id="ch-style">
+                  <option value="cross">Cross (CS-style)</option>
+                  <option value="dot">Dot only</option>
+                  <option value="circle">Circle</option>
+                  <option value="t-shape">T-shape</option>
+                </select>
+              </div>
+
+              <div class="ctrl-row">
+                <label>Color</label>
+                <input id="ch-color" type="color" value="#00ff00" />
+              </div>
+
+              <div class="ctrl-row">
+                <label>Size <span id="ch-size-val">8</span>px</label>
+                <input id="ch-size" type="range" min="2" max="30" value="8" />
+              </div>
+
+              <div class="ctrl-row">
+                <label>Gap <span id="ch-gap-val">4</span>px</label>
+                <input id="ch-gap" type="range" min="0" max="20" value="4" />
+              </div>
+
+              <div class="ctrl-row">
+                <label>Thickness <span id="ch-thickness-val">2</span>px</label>
+                <input id="ch-thickness" type="range" min="1" max="6" value="2" />
+              </div>
+
+              <div class="ctrl-row">
+                <label>
+                  <input id="ch-dot" type="checkbox" />
+                  Center dot
+                </label>
+              </div>
+
+              <div class="ctrl-row">
+                <label>
+                  <input id="ch-outline" type="checkbox" checked />
+                  Outline
+                </label>
+              </div>
+
+              <div class="ctrl-row">
+                <label>Outline opacity <span id="ch-outline-opacity-val">80</span>%</label>
+                <input id="ch-outline-opacity" type="range" min="20" max="100" value="80" />
+              </div>
+
+              <button id="btn-reset-crosshair" class="btn">Reset to defaults</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div id="lobby" class="screen">
       <div class="lobby-card">
         <div class="lobby-header">
