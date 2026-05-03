@@ -25,16 +25,39 @@
   const nameInput = document.getElementById("name-input");
   nameInput.value = localStorage.getItem("gm_name") || "Player" + Math.floor(Math.random() * 99);
 
+  // Pri vstupu do hry na mobilu pozadej o fullscreen (musi byt pri user gesture)
+  function tryGoFullscreenOnMobile() {
+    const isTouch = ("ontouchstart" in window) || navigator.maxTouchPoints > 0;
+    if (!isTouch) return;
+    if (typeof requestFullscreen === "function") {
+      requestFullscreen();
+    } else {
+      // requestFullscreen jeste neni definovane - zkusime primo
+      const el = document.documentElement;
+      const req = el.requestFullscreen ||
+                  el.webkitRequestFullscreen ||
+                  el.mozRequestFullScreen ||
+                  el.msRequestFullscreen;
+      if (req) req.call(el).catch(() => {});
+      if (screen.orientation && screen.orientation.lock) {
+        screen.orientation.lock("landscape").catch(() => {});
+      }
+    }
+  }
+
   document.getElementById("btn-quickplay").onclick = () => {
     saveName();
+    tryGoFullscreenOnMobile();
     socket.emit("quick_play", {}, handleJoin);
   };
   document.getElementById("btn-create").onclick = () => {
     saveName();
+    tryGoFullscreenOnMobile();
     socket.emit("create_room", { mapKey: "skybridge" }, handleJoin);
   };
   document.getElementById("btn-join").onclick = () => {
     saveName();
+    tryGoFullscreenOnMobile();
     const code = document.getElementById("join-code").value.trim().toUpperCase();
     if (!code) return;
     socket.emit("join_room", { roomId: code }, handleJoin);
@@ -873,13 +896,96 @@
     });
   }
 
+  // ---------- FULLSCREEN ----------
+  function isFullscreenActive() {
+    return !!(document.fullscreenElement ||
+              document.webkitFullscreenElement ||
+              document.mozFullScreenElement ||
+              document.msFullscreenElement);
+  }
+  function requestFullscreen() {
+    const el = document.documentElement;
+    const req = el.requestFullscreen ||
+                el.webkitRequestFullscreen ||
+                el.mozRequestFullScreen ||
+                el.msRequestFullscreen;
+    if (req) req.call(el).catch(() => {});
+
+    // Pokus o lock orientace na landscape (jen pokud telefon)
+    if (screen.orientation && screen.orientation.lock) {
+      screen.orientation.lock("landscape").catch(() => {});
+    }
+  }
+  function exitFullscreen() {
+    const exit = document.exitFullscreen ||
+                 document.webkitExitFullscreen ||
+                 document.mozCancelFullScreen ||
+                 document.msExitFullscreen;
+    if (exit) exit.call(document).catch(() => {});
+  }
+  function toggleFullscreen() {
+    if (isFullscreenActive()) exitFullscreen();
+    else requestFullscreen();
+  }
+
+  const mbtnFullscreen = document.getElementById("mbtn-fullscreen");
+  if (mbtnFullscreen) {
+    const fsHandler = (e) => {
+      e.preventDefault();
+      toggleFullscreen();
+      // Aktualizuj ikonku
+      mbtnFullscreen.textContent = isFullscreenActive() ? "⛶" : "⛶";
+    };
+    mbtnFullscreen.addEventListener("click", fsHandler);
+    mbtnFullscreen.addEventListener("touchend", fsHandler, { passive: false });
+  }
+
+  // Klavesa F = fullscreen toggle (PC)
+  document.addEventListener("keydown", (e) => {
+    if (isConsoleOpen || isChatOpen || isListeningForKey) return;
+    if (e.key === "F11" || (e.key === "f" && e.ctrlKey)) {
+      e.preventDefault();
+      toggleFullscreen();
+    }
+  });
+
+  // ---------- ROTATION HINT ----------
+  function updateOrientationHint() {
+    if (!isTouchDevice) return;
+    const isPortrait = window.innerHeight > window.innerWidth;
+    const isInGame = screens.game.classList.contains("active");
+    const dismissed = sessionStorage.getItem("kf_rotate_dismissed") === "1";
+
+    if (isPortrait && isInGame && !dismissed) {
+      document.body.classList.add("portrait-warning");
+    } else {
+      document.body.classList.remove("portrait-warning");
+    }
+  }
+  const rotateDismiss = document.getElementById("rotate-dismiss");
+  if (rotateDismiss) {
+    rotateDismiss.addEventListener("click", () => {
+      sessionStorage.setItem("kf_rotate_dismissed", "1");
+      document.body.classList.remove("portrait-warning");
+    });
+  }
+  window.addEventListener("resize", updateOrientationHint);
+  window.addEventListener("orientationchange", () => {
+    setTimeout(() => {
+      updateOrientationHint();
+      // Pri zmene orientace prepocti canvas
+      if (typeof resizeCanvas === "function") resizeCanvas();
+    }, 200);
+  });
+
   const canvas = document.getElementById("canvas");
   const ctx = canvas.getContext("2d");
 
   canvas.addEventListener("mousemove", (e) => {
     const rect = canvas.getBoundingClientRect();
-    mouseX = (e.clientX - rect.left) * (canvas.width / rect.width);
-    mouseY = (e.clientY - rect.top) * (canvas.height / rect.height);
+    // CSS souradnice (canvas se renderuje s setTransform(dpr) takze pouzivame CSS pixely)
+    mouseX = e.clientX - rect.left;
+    mouseY = e.clientY - rect.top;
   });
   canvas.addEventListener("mousedown", (e) => {
     if (e.button === 0) input.shoot = true;
@@ -932,6 +1038,7 @@
         particles.length = 0;
         showScreen("game");
         resizeCanvas();
+        if (typeof updateOrientationHint === "function") updateOrientationHint();
       }
     }
     if (screens.game.classList.contains("active") && snap.phase === "lobby") {
@@ -1164,22 +1271,40 @@
   }
 
   // ---------- CAMERA + RENDER ----------
+  // Vsechny render souradnice pouzivame v CSS pixelech (canvas je skalovany pres setTransform(dpr))
+  function canvasCssWidth() { return window.innerWidth; }
+  function canvasCssHeight() { return window.innerHeight; }
+
   function computeCamera() {
     const ww = SHARED.WORLD_WIDTH;
     const wh = SHARED.WORLD_HEIGHT;
-    const sx = canvas.width / ww;
-    const sy = canvas.height / wh;
+    const cw = canvasCssWidth();
+    const ch = canvasCssHeight();
+    const sx = cw / ww;
+    const sy = ch / wh;
     const scale = Math.min(sx, sy);
-    const x = (ww - canvas.width / scale) / 2;
-    const y = (wh - canvas.height / scale) / 2;
+    const x = (ww - cw / scale) / 2;
+    const y = (wh - ch / scale) / 2;
     return { x, y, scale };
   }
 
   function resizeCanvas() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+    // Pro ostry render na HiDPI obrazovkach (Retina, mobil) skalujeme canvas pixely
+    const dpr = Math.min(window.devicePixelRatio || 1, 2); // Limit 2 abychom neztratili FPS na 3x DPI
+    const cssWidth = window.innerWidth;
+    const cssHeight = window.innerHeight;
+    canvas.style.width = cssWidth + "px";
+    canvas.style.height = cssHeight + "px";
+    canvas.width = Math.round(cssWidth * dpr);
+    canvas.height = Math.round(cssHeight * dpr);
+    // Vsechny render operace skalujeme aby pouzivaly CSS pixely
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
   window.addEventListener("resize", resizeCanvas);
+  // Pri zmene orientace pockaame chvili a pak pretvorime
+  window.addEventListener("orientationchange", () => {
+    setTimeout(resizeCanvas, 200);
+  });
 
   let lastFrame = performance.now();
   function frame(now) {
@@ -1223,9 +1348,11 @@
   function render(state) {
     const cam = computeCamera();
     const map = SHARED.MAPS[state.mapKey];
+    const cw = canvasCssWidth();
+    const ch = canvasCssHeight();
 
     ctx.fillStyle = map?.bg || "#1a2840";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillRect(0, 0, cw, ch);
 
     const sx = (Math.random() - 0.5) * shakeAmount;
     const sy = (Math.random() - 0.5) * shakeAmount;
@@ -1253,7 +1380,7 @@
 
     // Vlastni crosshair - kreslime v screen coords (po ctx.restore)
     if (mouseX >= 0 && mouseY >= 0 &&
-        mouseX <= canvas.width && mouseY <= canvas.height) {
+        mouseX <= cw && mouseY <= ch) {
       drawCrosshair(ctx, mouseX, mouseY);
     }
   }

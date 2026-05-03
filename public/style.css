@@ -1193,3 +1193,145 @@ html, body {
   overscroll-behavior: none;
   touch-action: none;
 }
+
+/* ======================= ROTATION HINT ======================= */
+.rotate-hint {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 14, 26, 0.97);
+  z-index: 5000;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  text-align: center;
+}
+.rotate-hint .rotate-icon {
+  font-size: 64px;
+  margin-bottom: 24px;
+  animation: rotateBounce 1.4s ease-in-out infinite;
+}
+@keyframes rotateBounce {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(90deg); }
+}
+.rotate-hint h2 {
+  font-size: 22px;
+  letter-spacing: 2px;
+  color: #ffe66d;
+  margin-bottom: 8px;
+}
+.rotate-hint p {
+  color: #94a3c4;
+  margin-bottom: 24px;
+  font-size: 14px;
+}
+
+/* Zobraz rotation hint pouze na mobilu na vysku, ve hre, dokud uzivatel nezavre */
+body.has-touch.portrait-warning #rotate-hint {
+  display: flex;
+}
+
+/* ======================= SAFE AREA (notch, home indicator) ======================= */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+}
+
+/* Aplikuj safe area na mobilni ovladaci prvky */
+body.has-touch .mobile-left {
+  bottom: calc(24px + var(--safe-bottom));
+  left: calc(24px + var(--safe-left));
+}
+body.has-touch .mobile-right {
+  bottom: calc(24px + var(--safe-bottom));
+  right: calc(24px + var(--safe-right));
+}
+body.has-touch .mobile-top-buttons {
+  top: calc(16px + var(--safe-top));
+  right: calc(16px + var(--safe-right));
+}
+body.has-touch .btn-settings {
+  top: calc(16px + var(--safe-top));
+  left: calc(16px + var(--safe-left));
+}
+body.has-touch .mobile-weapons {
+  top: calc(16px + var(--safe-top));
+}
+
+/* ======================= FULLSCREEN ZAJISTENI ======================= */
+/* Body na mobilu vyplni cely viewport vc. minimum-height */
+body.has-touch {
+  position: fixed;
+  width: 100%;
+  height: 100%;
+  height: 100dvh; /* dynamicky viewport - schova URL bar pri scrollu */
+  overflow: hidden;
+}
+body.has-touch #app {
+  height: 100dvh;
+  width: 100%;
+}
+
+/* Zobrazene fullscreen tlacitko schovavame na desktopu - tam neni potreba */
+body:not(.has-touch) #mbtn-fullscreen { display: none; }
+
+/* ======================= LEPSI MOBILNI LAYOUTY ======================= */
+
+/* Stredne velky telefon (Pixel, iPhone Pro) - landscape */
+@media (max-width: 900px) and (orientation: landscape) {
+  .mbtn { width: 64px; height: 64px; font-size: 24px; }
+  .mbtn-jump { width: 72px; height: 72px; font-size: 28px; }
+  .aim-joystick { width: 140px; height: 140px; }
+  .aim-joystick-stick { width: 52px; height: 52px; margin-top: -26px; margin-left: -26px; }
+}
+
+/* Maly telefon - landscape */
+@media (max-width: 700px) and (orientation: landscape) {
+  .mbtn { width: 56px; height: 56px; font-size: 22px; }
+  .mbtn-jump { width: 64px; height: 64px; font-size: 26px; }
+  .aim-joystick { width: 120px; height: 120px; }
+  .aim-joystick-stick { width: 46px; height: 46px; margin-top: -23px; margin-left: -23px; }
+  .mbtn-weapon { width: 38px; height: 38px; font-size: 14px; }
+  .mbtn-icon { width: 38px; height: 38px; font-size: 16px; }
+  .btn-settings { width: 38px; height: 38px; font-size: 18px; }
+  .mobile-left { gap: 8px; bottom: calc(12px + var(--safe-bottom)); left: calc(12px + var(--safe-left)); }
+  .mobile-right { bottom: calc(12px + var(--safe-bottom)); right: calc(12px + var(--safe-right)); }
+}
+
+/* Maly telefon - portrait (klasicky na vysku) */
+@media (max-width: 500px) and (orientation: portrait) {
+  .mbtn { width: 60px; height: 60px; font-size: 22px; }
+  .mbtn-jump { width: 68px; height: 68px; font-size: 26px; }
+  .aim-joystick { width: 130px; height: 130px; }
+  .aim-joystick-stick { width: 48px; height: 48px; margin-top: -24px; margin-left: -24px; }
+}
+
+/* HUD na mobilu - mensi, prizpusobeny */
+body.has-touch .scoreboard {
+  font-size: 11px;
+  max-width: 220px;
+}
+body.has-touch .killfeed {
+  font-size: 11px;
+  right: 60px; /* aby nepřekrývalo vrchni ovladaci tlacitka */
+  top: calc(8px + var(--safe-top));
+}
+body.has-touch .round-info {
+  font-size: 11px;
+}
+
+/* Tlacitka v hlavnim menu vetsi a stmavlejsi pro touch */
+body.has-touch .btn {
+  padding: 14px 18px;
+  font-size: 15px;
+  min-height: 48px;
+}
+body.has-touch .menu-card,
+body.has-touch .lobby-card {
+  max-height: 90dvh;
+  overflow-y: auto;
+}

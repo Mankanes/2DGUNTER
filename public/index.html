@@ -9,6 +9,13 @@
 <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+  <!-- Doporuceni otocit telefon na sirku (zobrazi se jen kdyz je telefon na vysku ve hre) -->
+  <div id="rotate-hint" class="rotate-hint">
+    <div class="rotate-icon">📱➜📱</div>
+    <h2>Otoč telefon na šířku</h2>
+    <p>Hra se hraje líp v landscape režimu</p>
+    <button id="rotate-dismiss" class="btn">Pokračovat na výšku</button>
+  </div>
   <div id="app">
     <div id="menu" class="screen active">
       <div class="logo">
@@ -254,6 +261,7 @@
 
           <!-- Vrchni rohove tlacitka -->
           <div class="mobile-top-buttons">
+            <button class="mbtn-icon" id="mbtn-fullscreen" title="Fullscreen">⛶</button>
             <button class="mbtn-icon" id="mbtn-tab" title="Scoreboard">📊</button>
             <button class="mbtn-icon" id="mbtn-chat" title="Chat">💬</button>
           </div>
