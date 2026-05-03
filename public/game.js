@@ -761,6 +761,118 @@
     if (e.key === "ArrowRight") { input.right = false; e.preventDefault(); }
   });
 
+  // ---------- MOBILNI / DOTYKOVE OVLADANI ----------
+  const isTouchDevice = ("ontouchstart" in window) || navigator.maxTouchPoints > 0;
+  if (isTouchDevice) {
+    document.body.classList.add("has-touch");
+  }
+
+  // Aim joystick - pri tahnuti se nastavi aimX/aimY a strilet
+  const joystick = {
+    active: false,
+    aimX: 1,
+    aimY: 0,
+  };
+  const joystickEl = document.getElementById("aim-joystick");
+  const joystickStickEl = document.getElementById("aim-joystick-stick");
+
+  function joystickStart(e) {
+    e.preventDefault();
+    joystick.active = true;
+    joystickEl.classList.add("active");
+    input.shoot = true;
+    joystickMove(e);
+  }
+  function joystickMove(e) {
+    if (!joystick.active) return;
+    e.preventDefault();
+    const rect = joystickEl.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const touch = e.touches ? e.touches[0] : e;
+    const dx = touch.clientX - cx;
+    const dy = touch.clientY - cy;
+    const dist = Math.hypot(dx, dy) || 1;
+    // Normalizovany smer
+    joystick.aimX = dx / dist;
+    joystick.aimY = dy / dist;
+    // Vizualne posuvame stick (omezene na polomeru)
+    const maxR = rect.width / 2 - 20;
+    const useDist = Math.min(dist, maxR);
+    const sx = (dx / dist) * useDist;
+    const sy = (dy / dist) * useDist;
+    joystickStickEl.style.transform = `translate(${sx}px, ${sy}px)`;
+  }
+  function joystickEnd(e) {
+    if (!joystick.active) return;
+    e.preventDefault();
+    joystick.active = false;
+    joystickEl.classList.remove("active");
+    input.shoot = false;
+    joystickStickEl.style.transform = "translate(0, 0)";
+  }
+
+  joystickEl.addEventListener("touchstart", joystickStart, { passive: false });
+  joystickEl.addEventListener("touchmove", joystickMove, { passive: false });
+  joystickEl.addEventListener("touchend", joystickEnd, { passive: false });
+  joystickEl.addEventListener("touchcancel", joystickEnd, { passive: false });
+  // Pro desktop testovani taky podporujeme mys
+  joystickEl.addEventListener("mousedown", joystickStart);
+  document.addEventListener("mousemove", (e) => { if (joystick.active) joystickMove(e); });
+  document.addEventListener("mouseup", (e) => { if (joystick.active) joystickEnd(e); });
+
+  // Tlacitka pohybu (left, right, jump)
+  document.querySelectorAll(".mbtn[data-action]").forEach((btn) => {
+    const action = btn.getAttribute("data-action");
+    const press = (e) => {
+      e.preventDefault();
+      input[action] = true;
+      btn.classList.add("pressed");
+    };
+    const release = (e) => {
+      e.preventDefault();
+      input[action] = false;
+      btn.classList.remove("pressed");
+    };
+    btn.addEventListener("touchstart", press, { passive: false });
+    btn.addEventListener("touchend", release, { passive: false });
+    btn.addEventListener("touchcancel", release, { passive: false });
+    // Pro desktop debug
+    btn.addEventListener("mousedown", press);
+    btn.addEventListener("mouseup", release);
+    btn.addEventListener("mouseleave", release);
+  });
+
+  // Tlacitka zbrani
+  document.querySelectorAll(".mbtn-weapon").forEach((btn) => {
+    const w = btn.getAttribute("data-weapon");
+    const press = (e) => {
+      e.preventDefault();
+      input.switch = w;
+      // Vizualne oznacit aktivni (i kdyz se to vyresi i pres state.weapon)
+      document.querySelectorAll(".mbtn-weapon").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+    };
+    btn.addEventListener("touchstart", press, { passive: false });
+    btn.addEventListener("click", press);
+  });
+
+  // Vrchni tlacitka - chat a scoreboard
+  const mbtnTab = document.getElementById("mbtn-tab");
+  if (mbtnTab) {
+    mbtnTab.addEventListener("touchstart", (e) => { e.preventDefault(); showTabScoreboard(); }, { passive: false });
+    mbtnTab.addEventListener("touchend", (e) => { e.preventDefault(); hideTabScoreboard(); }, { passive: false });
+    mbtnTab.addEventListener("mousedown", (e) => { e.preventDefault(); showTabScoreboard(); });
+    mbtnTab.addEventListener("mouseup", (e) => { e.preventDefault(); hideTabScoreboard(); });
+  }
+  const mbtnChat = document.getElementById("mbtn-chat");
+  if (mbtnChat) {
+    mbtnChat.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (typeof openGameChat === "function") openGameChat();
+    });
+  }
+
   const canvas = document.getElementById("canvas");
   const ctx = canvas.getContext("2d");
 
@@ -786,7 +898,13 @@
     if (!screens.game.classList.contains("active")) return;
     const self = getInterpolatedSelf();
     let aimX = 1, aimY = 0;
-    if (self) {
+
+    if (joystick.active) {
+      // Mobilni joystick - aim podle smeru tahnuti
+      aimX = joystick.aimX;
+      aimY = joystick.aimY;
+    } else if (self) {
+      // PC - aim podle pozice mysi
       const cam = computeCamera();
       const sx = (self.x + SHARED.PLAYER.WIDTH / 2 - cam.x) * cam.scale;
       const sy = (self.y + SHARED.PLAYER.HEIGHT * 0.4 - cam.y) * cam.scale;
@@ -1244,11 +1362,16 @@
 
     let aimX, aimY;
     if (p.id === selfId) {
-      const cam = computeCamera();
-      const sx = (cx - cam.x) * cam.scale;
-      const sy = (cy - cam.y) * cam.scale;
-      aimX = mouseX - sx;
-      aimY = mouseY - sy;
+      if (joystick.active) {
+        aimX = joystick.aimX;
+        aimY = joystick.aimY;
+      } else {
+        const cam = computeCamera();
+        const sx = (cx - cam.x) * cam.scale;
+        const sy = (cy - cam.y) * cam.scale;
+        aimX = mouseX - sx;
+        aimY = mouseY - sy;
+      }
     } else {
       aimX = p.facing;
       aimY = 0;
@@ -1434,6 +1557,11 @@
         (self.ammo === -1 ? '<span class="wammo">∞</span>' :
         `<span class="wammo">${self.ammo}</span>`);
       wi.style.display = "flex";
+
+      // Mobil: zvyrazni aktivni zbran v tlacitkach
+      document.querySelectorAll(".mbtn-weapon").forEach((b) => {
+        b.classList.toggle("active", b.getAttribute("data-weapon") === self.weapon);
+      });
     } else {
       wi.style.display = "none";
     }

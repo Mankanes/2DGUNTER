@@ -2,7 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
 <title>KNOCKFRIEND</title>
 <link rel="stylesheet" href="style.css" />
 </head>
@@ -223,6 +225,40 @@
         <div id="weapon-info" class="weapon-info"></div>
         <div id="phase-banner" class="phase-banner"></div>
         <div id="killfeed" class="killfeed"></div>
+
+        <!-- MOBILNI OVLADANI - skrytý na desktopu, viditelný na mobilu -->
+        <div id="mobile-controls" class="mobile-controls">
+          <!-- Leva strana: pohyb -->
+          <div class="mobile-left">
+            <button class="mbtn mbtn-left" data-action="left">◀</button>
+            <button class="mbtn mbtn-right" data-action="right">▶</button>
+            <button class="mbtn mbtn-jump" data-action="jump">⤒</button>
+          </div>
+
+          <!-- Prava strana: aim joystick (tahni palcem - hra strili) -->
+          <div class="mobile-right">
+            <div class="aim-joystick" id="aim-joystick">
+              <div class="aim-joystick-base"></div>
+              <div class="aim-joystick-stick" id="aim-joystick-stick"></div>
+              <div class="aim-joystick-hint">AIM &amp; SHOOT</div>
+            </div>
+          </div>
+
+          <!-- Vyber zbrane (vrchni ridek) -->
+          <div class="mobile-weapons">
+            <button class="mbtn-weapon" data-weapon="pistol">1</button>
+            <button class="mbtn-weapon" data-weapon="shotgun">2</button>
+            <button class="mbtn-weapon" data-weapon="rocket">3</button>
+            <button class="mbtn-weapon" data-weapon="laser">4</button>
+          </div>
+
+          <!-- Vrchni rohove tlacitka -->
+          <div class="mobile-top-buttons">
+            <button class="mbtn-icon" id="mbtn-tab" title="Scoreboard">📊</button>
+            <button class="mbtn-icon" id="mbtn-chat" title="Chat">💬</button>
+          </div>
+        </div>
+
         <div id="game-chat" class="game-chat">
           <div id="game-chat-log" class="game-chat-log"></div>
           <div id="game-chat-input-wrap" class="game-chat-input-wrap">
