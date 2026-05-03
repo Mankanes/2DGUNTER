@@ -12,20 +12,6 @@
   const SNAPSHOT_BUFFER_MS = 100;
   const snapshots = [];
 
-  // ---------- CLIENT-SIDE PREDICTION (jednoduchy pristup) ----------
-  // Klient si pocita svoji pozici sam. Server ji jen prijme a relayuje
-  // ostatnim. ZADNA reconciliation - klient je pan sve pozice.
-  // Inicializace probehne jednou pri prvnim snapshotu kdy zijeme.
-  const localMe = {
-    inited: false,    // jestli jsme uz inicializovali pozici
-    x: 0, y: 0,
-    vx: 0, vy: 0,
-    onGround: false,
-    jumpsLeft: 2,
-    facing: 1,
-    lastJumpInput: false,
-  };
-
   const screens = {
     menu: document.getElementById("menu"),
     lobby: document.getElementById("lobby"),
@@ -427,16 +413,6 @@
       shoot: input.shoot, aimX, aimY, switch: input.switch,
     });
     input.switch = null;
-
-    // Posli i lokalni pozici aby ji server mohl preposlat ostatnim
-    if (localMe.inited &&
-        Number.isFinite(localMe.x) && Number.isFinite(localMe.y)) {
-      socket.emit("position", {
-        x: localMe.x,
-        y: localMe.y,
-        facing: localMe.facing,
-      });
-    }
   }, 1000 / 30);
 
   // ---------- SNAPSHOTS / INTERPOLATION ----------
@@ -444,31 +420,6 @@
     snap.recvAt = performance.now();
     snapshots.push(snap);
     while (snapshots.length > 120) snapshots.shift();
-
-    // Inicializace lokalni pozice - pouze jednou pri prvnim spawnu nebo respawnu
-    const serverMe = snap.players.find((p) => p.id === selfId);
-    if (serverMe) {
-      if (!serverMe.alive) {
-        // Mrtvy - resetuj inited aby pri respawnu se nastavila nova pozice
-        localMe.inited = false;
-      } else if (!localMe.inited) {
-        // Spawn nebo respawn - prevezmi pozici ze serveru jednou
-        const sx = Number(serverMe.x);
-        const sy = Number(serverMe.y);
-        if (Number.isFinite(sx) && Number.isFinite(sy)) {
-          localMe.inited = true;
-          localMe.x = sx;
-          localMe.y = sy;
-          localMe.vx = 0;
-          localMe.vy = 0;
-          localMe.onGround = !!serverMe.onGround;
-          localMe.facing = serverMe.facing || 1;
-          localMe.jumpsLeft = SHARED.PLAYER.MAX_JUMPS;
-          localMe.lastJumpInput = false;
-        }
-      }
-      // ZADNA reconciliation - server nas pozici neopravuje
-    }
 
     if (screens.lobby.classList.contains("active")) {
       if (snap.phase !== "lobby") {
@@ -515,14 +466,6 @@
   }
 
   function getInterpolatedSelf() {
-    // Pokud mame lokalni pozici, vrat ji (kvuli aim z myší)
-    if (localMe.inited && snapshots.length) {
-      const last = snapshots[snapshots.length - 1];
-      const self = last.players.find((p) => p.id === selfId);
-      if (self) {
-        return { ...self, x: localMe.x, y: localMe.y, facing: localMe.facing };
-      }
-    }
     if (!snapshots.length) return null;
     const last = snapshots[snapshots.length - 1];
     return last.players.find((p) => p.id === selfId);
@@ -715,94 +658,6 @@
     }
   }
 
-  // ---------- LOKALNI FYZIKA (klient si pocita pohyb sam) ----------
-  function updateLocalPhysics(dt) {
-    if (!localMe.inited || !SHARED || !snapshots.length) return;
-    if (!Number.isFinite(dt) || dt <= 0 || dt > 0.1) return;
-
-    const PL = SHARED.PLAYER;
-
-    // Pohyb podle vstupu
-    const wantLeft = input.left && !input.right;
-    const wantRight = input.right && !input.left;
-    const targetVx = wantLeft ? -PL.MOVE_SPEED : wantRight ? PL.MOVE_SPEED : 0;
-    const accel = localMe.onGround ? PL.ACCEL_GROUND : PL.ACCEL_AIR;
-
-    if (targetVx !== 0) {
-      const diff = targetVx - localMe.vx;
-      const step = Math.sign(diff) * accel * dt;
-      if (Math.abs(step) > Math.abs(diff)) localMe.vx = targetVx;
-      else localMe.vx += step;
-      localMe.facing = wantLeft ? -1 : 1;
-    } else if (localMe.onGround) {
-      const fric = PL.FRICTION_GROUND * dt;
-      if (localMe.vx > fric) localMe.vx -= fric;
-      else if (localMe.vx < -fric) localMe.vx += fric;
-      else localMe.vx = 0;
-    }
-
-    // Skok (edge-triggered)
-    if (input.jump && !localMe.lastJumpInput && localMe.jumpsLeft > 0) {
-      if (localMe.onGround || localMe.jumpsLeft === PL.MAX_JUMPS) {
-        localMe.vy = -PL.JUMP_VELOCITY;
-      } else {
-        localMe.vy = -PL.DOUBLE_JUMP_VELOCITY;
-      }
-      localMe.jumpsLeft--;
-      localMe.onGround = false;
-    }
-    localMe.lastJumpInput = input.jump;
-
-    // Gravitace
-    localMe.vy += SHARED.GRAVITY * dt;
-    if (localMe.vy > SHARED.MAX_FALL_SPEED) localMe.vy = SHARED.MAX_FALL_SPEED;
-
-    // Kolize s platformami z posledniho snapshotu
-    const lastSnap = snapshots[snapshots.length - 1];
-    const map = SHARED.MAPS[lastSnap.mapKey];
-    if (!map) return;
-    const W = SHARED.PLAYER.WIDTH;
-    const H = SHARED.PLAYER.HEIGHT;
-
-    localMe.onGround = false;
-
-    // X osa
-    localMe.x += localMe.vx * dt;
-    for (let i = 0; i < map.platforms.length; i++) {
-      const plat = map.platforms[i];
-      if (lastSnap.platforms[i] && lastSnap.platforms[i].destroyed) continue;
-      if (localMe.x < plat.x + plat.w && localMe.x + W > plat.x &&
-          localMe.y < plat.y + plat.h && localMe.y + H > plat.y) {
-        if (localMe.vx > 0) localMe.x = plat.x - W;
-        else if (localMe.vx < 0) localMe.x = plat.x + plat.w;
-        localMe.vx = 0;
-      }
-    }
-
-    // Y osa
-    localMe.y += localMe.vy * dt;
-    for (let i = 0; i < map.platforms.length; i++) {
-      const plat = map.platforms[i];
-      if (lastSnap.platforms[i] && lastSnap.platforms[i].destroyed) continue;
-      if (localMe.x < plat.x + plat.w && localMe.x + W > plat.x &&
-          localMe.y < plat.y + plat.h && localMe.y + H > plat.y) {
-        if (localMe.vy > 0) {
-          localMe.y = plat.y - H;
-          localMe.onGround = true;
-          localMe.vy = 0;
-          localMe.jumpsLeft = PL.MAX_JUMPS;
-        } else if (localMe.vy < 0) {
-          localMe.y = plat.y + plat.h;
-          localMe.vy = 0;
-        }
-      }
-    }
-
-    // Hranice mapy
-    if (localMe.x < -40) localMe.x = -40;
-    if (localMe.x > SHARED.WORLD_WIDTH - W + 40) localMe.x = SHARED.WORLD_WIDTH - W + 40;
-  }
-
   // ---------- CAMERA + RENDER ----------
   function computeCamera() {
     const ww = SHARED.WORLD_WIDTH;
@@ -830,19 +685,6 @@
     if (!SHARED || !screens.game.classList.contains("active")) return;
     const state = getInterpolatedState();
     if (!state) return;
-
-    // Pocitej lokalni fyziku
-    updateLocalPhysics(dt);
-
-    // Pouzij lokalni pozici pro vlastni postavu (okamzity pohyb)
-    if (localMe.inited) {
-      const selfRendered = state.players.find((p) => p.id === selfId);
-      if (selfRendered && selfRendered.alive) {
-        selfRendered.x = localMe.x;
-        selfRendered.y = localMe.y;
-        selfRendered.facing = localMe.facing;
-      }
-    }
 
     updateParticles(dt);
 
