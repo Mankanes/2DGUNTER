@@ -806,3 +806,21 @@ kbd {
     margin: 0 auto;
   }
 }
+
+/* ======================= ADMIN STYLING ======================= */
+.lobby-player.admin {
+  border-color: #ffd700;
+  box-shadow: 0 0 12px rgba(255, 215, 0, 0.3);
+}
+.admin-badge {
+  filter: drop-shadow(0 0 4px rgba(255, 215, 0, 0.8));
+}
+.chat-admin {
+  filter: drop-shadow(0 0 3px rgba(255, 215, 0, 0.7));
+  margin-right: 2px;
+}
+.chat-msg.system {
+  background: rgba(255, 215, 0, 0.06);
+  border-left: 3px solid #ffd700;
+  padding-left: 6px;
+}

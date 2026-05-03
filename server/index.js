@@ -208,6 +208,7 @@ class Game {
       score: 0, kills: 0, deaths: 0,
       ready: !!isBot, // boti jsou vzdy ready
       isBot,
+      isAdmin: false,
       botMove: false, // jestli se bot ma hybat
       shotCountWindow: [],
     };
@@ -803,6 +804,7 @@ class Game {
         ammo: p.ammo === Infinity ? -1 : p.ammo,
         score: p.score, kills: p.kills, deaths: p.deaths,
         ready: p.ready,
+        isAdmin: !!p.isAdmin,
       })),
       bullets: this.bullets.map((b) => ({
         id: b.id, x: +b.x.toFixed(1), y: +b.y.toFixed(1),
@@ -829,6 +831,14 @@ const io = new Server(server, {
   pingInterval: 10000,
   pingTimeout: 8000,
 });
+
+// ============================================================
+// ADMIN HESLO
+// Nastav promennou prostredi ADMIN_PASSWORD na Renderu (Settings > Environment)
+// Pokud neni nastavena, pouzije se default - ZMEN HO!
+// Pouzivani: v chatu napis  /login <heslo>
+// ============================================================
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "martinkuncarA";
 
 app.use(express.static(path.join(__dirname, "..", "public")));
 
@@ -926,7 +936,7 @@ io.on("connection", (socket) => {
     room.game.tryStartMatch();
   });
 
-  // Konzolove prikazy (jako CS)
+  // Konzolove prikazy (jako CS) - pouze pro adminy
   let nextBotIdNum = 1;
   socket.on("console", (data) => {
     const roomId = socketRoom.get(socket.id);
@@ -934,6 +944,14 @@ io.on("connection", (socket) => {
     if (!room) return sendConsole(socket, "Nejsi v mistnosti", "error");
     const cmd = (data?.cmd || "").toString().trim();
     if (!cmd) return;
+
+    // Admin check - vsechno jine je zakazane
+    const me = room.game.players.get(socket.id);
+    if (!me || !me.isAdmin) {
+      sendConsole(socket, "✗ Permission denied. Pouze admin muze pouzivat konzoli.", "error");
+      sendConsole(socket, "  Pro prihlaseni napis v chatu: /login <heslo>", "info");
+      return;
+    }
 
     const parts = cmd.split(/\s+/);
     const main = parts[0].toLowerCase();
@@ -1086,11 +1104,60 @@ io.on("connection", (socket) => {
     let text = (data?.text || "").toString().slice(0, 100).trim();
     if (!text) return;
 
+    // Admin login - heslo se nikdy nesmi objevit v chatu
+    if (text.startsWith("/login ")) {
+      const password = text.slice(7).trim();
+      if (password === ADMIN_PASSWORD) {
+        player.isAdmin = true;
+        // Posli jen tomuto hraci potvrzeni (ostatni neuvidi)
+        socket.emit("chat", {
+          id: "system",
+          name: "SYSTEM",
+          color: "#ffd700",
+          text: `✓ Admin status povolen pro ${player.name}`,
+          time: now,
+        });
+        // A vsem oznam ze je novy admin (bez hesla)
+        io.to(roomId).emit("chat", {
+          id: "system",
+          name: "SYSTEM",
+          color: "#ffd700",
+          text: `👑 ${player.name} se stal adminem`,
+          time: now,
+        });
+        // Aktualizuj room_info aby UI ukazovalo admin status
+        io.to(roomId).emit("room_info", roomInfo(room));
+      } else {
+        socket.emit("chat", {
+          id: "system",
+          name: "SYSTEM",
+          color: "#ff5e3d",
+          text: "✗ Nespravne heslo",
+          time: now,
+        });
+      }
+      return; // /login se nikdy nebroadcastuje!
+    }
+
+    if (text === "/logout" && player.isAdmin) {
+      player.isAdmin = false;
+      socket.emit("chat", {
+        id: "system",
+        name: "SYSTEM",
+        color: "#94a3c4",
+        text: "Admin status odebran",
+        time: now,
+      });
+      io.to(roomId).emit("room_info", roomInfo(room));
+      return;
+    }
+
     io.to(roomId).emit("chat", {
       id: socket.id,
       name: player.name,
       color: player.color,
       text,
+      isAdmin: player.isAdmin,
       time: now,
     });
   });
@@ -1177,6 +1244,7 @@ function roomInfo(room) {
     players: [...room.game.players.values()].map((p) => ({
       id: p.id, name: p.name, color: p.color,
       ready: p.ready, score: p.score,
+      isAdmin: !!p.isAdmin,
     })),
   };
 }

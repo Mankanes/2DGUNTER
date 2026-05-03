@@ -125,10 +125,12 @@
     lobbyPlayersEl.innerHTML = "";
     for (const p of info.players) {
       const row = document.createElement("div");
-      row.className = "lobby-player" + (p.ready ? " ready" : "");
+      row.className = "lobby-player" + (p.ready ? " ready" : "") + (p.isAdmin ? " admin" : "");
+      const adminBadge = p.isAdmin ? '<span class="admin-badge">👑</span> ' : '';
+      const nameStyle = p.isAdmin ? 'color: #ffd700' : '';
       row.innerHTML = `
         <div class="swatch" style="background:${p.color};color:${p.color}"></div>
-        <div class="pname">${escapeHtml(p.name)}${p.id === selfId ? " (you)" : ""}</div>
+        <div class="pname" style="${nameStyle}">${adminBadge}${escapeHtml(p.name)}${p.id === selfId ? " (you)" : ""}</div>
         <div class="pready">${p.ready ? "READY" : "..."}</div>
       `;
       lobbyPlayersEl.appendChild(row);
@@ -565,11 +567,15 @@
   });
 
   function appendChatMessage(msg) {
+    const adminBadge = msg.isAdmin ? '<span class="chat-admin">👑</span> ' : '';
+    const nameColor = msg.isAdmin ? "#ffd700" : msg.color;
+
     // Lobby log
     const lobbyRow = document.createElement("div");
-    lobbyRow.className = "chat-msg";
+    lobbyRow.className = "chat-msg" + (msg.id === "system" ? " system" : "");
     lobbyRow.innerHTML =
-      `<span class="chat-name" style="color:${msg.color}">${escapeHtml(msg.name)}:</span>` +
+      adminBadge +
+      `<span class="chat-name" style="color:${nameColor}">${escapeHtml(msg.name)}:</span>` +
       `<span class="chat-text">${escapeHtml(msg.text)}</span>`;
     lobbyChatLog.appendChild(lobbyRow);
     lobbyChatLog.scrollTop = lobbyChatLog.scrollHeight;
@@ -582,7 +588,8 @@
     const gameRow = document.createElement("div");
     gameRow.className = "game-chat-msg";
     gameRow.innerHTML =
-      `<span class="chat-name" style="color:${msg.color}">${escapeHtml(msg.name)}:</span>` +
+      adminBadge +
+      `<span class="chat-name" style="color:${nameColor}">${escapeHtml(msg.name)}:</span>` +
       `<span class="chat-text">${escapeHtml(msg.text)}</span>`;
     gameChatLog.appendChild(gameRow);
     while (gameChatLog.children.length > 6) {
@@ -1169,9 +1176,10 @@
     ctx.font = "bold 13px Segoe UI";
     ctx.textAlign = "center";
     ctx.fillStyle = "rgba(0,0,0,0.7)";
-    ctx.fillRect(p.x + W / 2 - 50, p.y - 22, 100, 16);
-    ctx.fillStyle = p.color;
-    ctx.fillText(p.name + (p.id === selfId ? " ★" : ""), p.x + W / 2, p.y - 10);
+    ctx.fillRect(p.x + W / 2 - 55, p.y - 22, 110, 16);
+    ctx.fillStyle = p.isAdmin ? "#ffd700" : p.color;
+    const namePrefix = p.isAdmin ? "👑 " : "";
+    ctx.fillText(namePrefix + p.name + (p.id === selfId ? " ★" : ""), p.x + W / 2, p.y - 10);
     ctx.restore();
 
     const hpRatio = clamp(p.hp / SHARED.PLAYER.MAX_HEALTH, 0, 1);
@@ -1370,9 +1378,11 @@
     let html = `<div class="row header">
         <div></div><div>Player</div><div>W</div><div>K</div><div>D</div></div>`;
     for (const p of players) {
+      const adminBadge = p.isAdmin ? "👑 " : "";
+      const nameColor = p.isAdmin ? 'color:#ffd700' : '';
       html += `<div class="row${p.alive ? "" : " dead"}">
         <div class="swatch" style="background:${p.color}"></div>
-        <div class="pname">${escapeHtml(p.name)}${p.id === selfId ? " ★" : ""}</div>
+        <div class="pname" style="${nameColor}">${adminBadge}${escapeHtml(p.name)}${p.id === selfId ? " ★" : ""}</div>
         <div class="pscore">${p.score}</div>
         <div class="pkd">${p.kills}</div>
         <div class="pkd">${p.deaths}</div>
