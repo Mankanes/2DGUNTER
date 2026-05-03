@@ -963,15 +963,25 @@ body.has-touch .mobile-controls {
   display: block;
 }
 
-/* Levy panel - pohyb */
+/* Levy panel - pohyb (jump nahore, sipky dole) */
 .mobile-left {
   position: absolute;
   bottom: 24px;
   left: 24px;
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
   gap: 12px;
   pointer-events: auto;
+  align-items: center;
+}
+.mobile-jump-row {
+  display: flex;
+  justify-content: center;
+}
+.mobile-arrow-row {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
 }
 .mbtn {
   width: 72px;
@@ -998,15 +1008,7 @@ body.has-touch .mobile-controls {
   border-color: #ffe66d;
   transform: scale(0.95);
 }
-.mbtn-jump {
-  background: rgba(255, 230, 109, 0.15);
-  border-color: #ffe66d;
-  color: #ffe66d;
-  width: 80px;
-  height: 80px;
-  font-size: 32px;
-  margin-left: 4px;
-}
+/* Jump tlacitko ma stejnou velikost a barvu jako sipky - zadny rozdil */
 
 /* Pravy panel - aim joystick */
 .mobile-right {

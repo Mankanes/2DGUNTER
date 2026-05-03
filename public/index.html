@@ -235,11 +235,15 @@
 
         <!-- MOBILNI OVLADANI - skrytý na desktopu, viditelný na mobilu -->
         <div id="mobile-controls" class="mobile-controls">
-          <!-- Leva strana: pohyb -->
+          <!-- Leva strana: pohyb (jump nahore, arrows pod) -->
           <div class="mobile-left">
-            <button class="mbtn mbtn-left" data-action="left">◀</button>
-            <button class="mbtn mbtn-right" data-action="right">▶</button>
-            <button class="mbtn mbtn-jump" data-action="jump">⤒</button>
+            <div class="mobile-jump-row">
+              <button class="mbtn mbtn-jump" data-action="jump">⤒</button>
+            </div>
+            <div class="mobile-arrow-row">
+              <button class="mbtn mbtn-left" data-action="left">◀</button>
+              <button class="mbtn mbtn-right" data-action="right">▶</button>
+            </div>
           </div>
 
           <!-- Prava strana: aim joystick (tahni palcem - hra strili) -->
