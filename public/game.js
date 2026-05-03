@@ -12,12 +12,12 @@
   const SNAPSHOT_BUFFER_MS = 100;
   const snapshots = [];
 
-  // ---------- KROK 1: PREDICTION STATE (ALE NEPOUZIVAME RENDER) ----------
-  // Pocitame to paralelne, ale render bere serverovou pozici. Diky tomu
-  // muzeme overit ze fyzika nepadne, aniz bychom riskovali ze hracova
-  // postava zmizi. Renderovani lokalni pozice se zapne v Kroku 2.
+  // ---------- CLIENT-SIDE PREDICTION (jednoduchy pristup) ----------
+  // Klient si pocita svoji pozici sam. Server ji jen prijme a relayuje
+  // ostatnim. ZADNA reconciliation - klient je pan sve pozice.
+  // Inicializace probehne jednou pri prvnim snapshotu kdy zijeme.
   const localMe = {
-    active: false,
+    inited: false,    // jestli jsme uz inicializovali pozici
     x: 0, y: 0,
     vx: 0, vy: 0,
     onGround: false,
@@ -25,14 +25,6 @@
     facing: 1,
     lastJumpInput: false,
   };
-
-  function localMeIsValid() {
-    return localMe.active &&
-           Number.isFinite(localMe.x) &&
-           Number.isFinite(localMe.y) &&
-           Number.isFinite(localMe.vx) &&
-           Number.isFinite(localMe.vy);
-  }
 
   const screens = {
     menu: document.getElementById("menu"),
@@ -418,7 +410,6 @@
 
   setInterval(() => {
     if (!SHARED) return;
-    // Posilat input jen kdyz jsme ve hre (sila pri lobby/menu zbytecne)
     if (!screens.game.classList.contains("active")) return;
     const self = getInterpolatedSelf();
     let aimX = 1, aimY = 0;
@@ -436,7 +427,17 @@
       shoot: input.shoot, aimX, aimY, switch: input.switch,
     });
     input.switch = null;
-  }, 1000 / 30);  // 30 Hz = stejne jako server tick rate
+
+    // Posli i lokalni pozici aby ji server mohl preposlat ostatnim
+    if (localMe.inited &&
+        Number.isFinite(localMe.x) && Number.isFinite(localMe.y)) {
+      socket.emit("position", {
+        x: localMe.x,
+        y: localMe.y,
+        facing: localMe.facing,
+      });
+    }
+  }, 1000 / 30);
 
   // ---------- SNAPSHOTS / INTERPOLATION ----------
   socket.on("state", (snap) => {
@@ -444,46 +445,29 @@
     snapshots.push(snap);
     while (snapshots.length > 120) snapshots.shift();
 
-    // KROK 1: synchronizace localMe se serverem
+    // Inicializace lokalni pozice - pouze jednou pri prvnim spawnu nebo respawnu
     const serverMe = snap.players.find((p) => p.id === selfId);
     if (serverMe) {
-      const sx = Number(serverMe.x);
-      const sy = Number(serverMe.y);
-      const validServer = Number.isFinite(sx) && Number.isFinite(sy);
-
       if (!serverMe.alive) {
-        // Mrtvy - vypni prediction
-        localMe.active = false;
-      } else if (!localMe.active && validServer) {
-        // Spawn - inicializuj lokalni pozici
-        localMe.active = true;
-        localMe.x = sx;
-        localMe.y = sy;
-        localMe.vx = 0;
-        localMe.vy = 0;
-        localMe.onGround = !!serverMe.onGround;
-        localMe.facing = serverMe.facing || 1;
-        localMe.jumpsLeft = SHARED.PLAYER.MAX_JUMPS;
-        localMe.lastJumpInput = false;
-      } else if (localMe.active && validServer) {
-        // Bezna oprava (reconciliation): pokud se rozejdeme moc, resyncuj
-        if (!localMeIsValid()) {
+        // Mrtvy - resetuj inited aby pri respawnu se nastavila nova pozice
+        localMe.inited = false;
+      } else if (!localMe.inited) {
+        // Spawn nebo respawn - prevezmi pozici ze serveru jednou
+        const sx = Number(serverMe.x);
+        const sy = Number(serverMe.y);
+        if (Number.isFinite(sx) && Number.isFinite(sy)) {
+          localMe.inited = true;
           localMe.x = sx;
           localMe.y = sy;
           localMe.vx = 0;
           localMe.vy = 0;
-        } else {
-          const ddx = sx - localMe.x;
-          const ddy = sy - localMe.y;
-          if (Math.abs(ddx) > 300 || Math.abs(ddy) > 300) {
-            // Velky rozdil - skoc na server pozici (asi knockback nebo respawn)
-            localMe.x = sx;
-            localMe.y = sy;
-          }
+          localMe.onGround = !!serverMe.onGround;
+          localMe.facing = serverMe.facing || 1;
+          localMe.jumpsLeft = SHARED.PLAYER.MAX_JUMPS;
+          localMe.lastJumpInput = false;
         }
       }
-    } else {
-      localMe.active = false;
+      // ZADNA reconciliation - server nas pozici neopravuje
     }
 
     if (screens.lobby.classList.contains("active")) {
@@ -531,8 +515,14 @@
   }
 
   function getInterpolatedSelf() {
-    // Optimalizace: nemusime klonovat cely state - jen najdeme self
-    // v poslednim snapshotu (input handler nepotrebuje interpolaci)
+    // Pokud mame lokalni pozici, vrat ji (kvuli aim z myší)
+    if (localMe.inited && snapshots.length) {
+      const last = snapshots[snapshots.length - 1];
+      const self = last.players.find((p) => p.id === selfId);
+      if (self) {
+        return { ...self, x: localMe.x, y: localMe.y, facing: localMe.facing };
+      }
+    }
     if (!snapshots.length) return null;
     const last = snapshots[snapshots.length - 1];
     return last.players.find((p) => p.id === selfId);
@@ -725,14 +715,10 @@
     }
   }
 
-  // ---------- KROK 1: LOKALNI FYZIKA (paralelne, ale neovlivnuje render) ----------
+  // ---------- LOKALNI FYZIKA (klient si pocita pohyb sam) ----------
   function updateLocalPhysics(dt) {
-    if (!localMe.active || !SHARED || !snapshots.length) return;
+    if (!localMe.inited || !SHARED || !snapshots.length) return;
     if (!Number.isFinite(dt) || dt <= 0 || dt > 0.1) return;
-    if (!localMeIsValid()) {
-      localMe.active = false;
-      return;
-    }
 
     const PL = SHARED.PLAYER;
 
@@ -815,25 +801,6 @@
     // Hranice mapy
     if (localMe.x < -40) localMe.x = -40;
     if (localMe.x > SHARED.WORLD_WIDTH - W + 40) localMe.x = SHARED.WORLD_WIDTH - W + 40;
-
-    // Pojistka: po fyzice ucely overit ze nemame NaN
-    if (!localMeIsValid()) {
-      // Detailni diagnostika - ale jen jednou (rate limit)
-      if (!window._nanLogged) {
-        window._nanLogged = true;
-        console.warn("[localMe] Fyzika vyrobila NaN. Stav:", {
-          x: localMe.x,
-          y: localMe.y,
-          vx: localMe.vx,
-          vy: localMe.vy,
-          onGround: localMe.onGround,
-          jumpsLeft: localMe.jumpsLeft,
-          dt: dt,
-          input: { left: input.left, right: input.right, jump: input.jump },
-        });
-      }
-      localMe.active = false;
-    }
   }
 
   // ---------- CAMERA + RENDER ----------
@@ -864,9 +831,18 @@
     const state = getInterpolatedState();
     if (!state) return;
 
-    // KROK 1: Pocitej lokalni fyziku, ale neovlivnuj render
-    // (pokud cokoliv selze, hra vypada presne stejne jak driv)
+    // Pocitej lokalni fyziku
     updateLocalPhysics(dt);
+
+    // Pouzij lokalni pozici pro vlastni postavu (okamzity pohyb)
+    if (localMe.inited) {
+      const selfRendered = state.players.find((p) => p.id === selfId);
+      if (selfRendered && selfRendered.alive) {
+        selfRendered.x = localMe.x;
+        selfRendered.y = localMe.y;
+        selfRendered.facing = localMe.facing;
+      }
+    }
 
     updateParticles(dt);
 

@@ -395,14 +395,31 @@ class Game {
         continue;
       }
 
-      // Knockback decay - aplikujeme i pro klient-authoritative hrace,
-      // protoze klient knockback prevezme jen kdyz prijde event
       const PL = SHARED.PLAYER;
+
+      // Realni hraci: server jim NEPOCITA fyziku (klient si ji dela sam).
+      // Server zpracuje jen zbrane a strelbu.
+      if (!p.isBot) {
+        const inp = p.input;
+        // Zbranovy switch
+        if (inp.switch && SHARED.WEAPONS[inp.switch]) {
+          if (p.weapon !== inp.switch) {
+            p.weapon = inp.switch;
+            if (p.weapon === "pistol") p.ammo = Infinity;
+          }
+        }
+        // Strelba
+        if (allowShoot && inp.shoot) {
+          this.tryShoot(p);
+        }
+        continue; // dalsi fyzika pro realne hrace neni
+      }
+
+      // BOTI: server-authoritative fyzika
       const damp = Math.exp(-PL.KNOCKBACK_DAMP * dt);
       p.knockbackVx *= damp;
       p.knockbackVy *= damp;
 
-      // Server-authoritative fyzika pro VSECHNY hrace (vc. realnych)
       const inp = p.input;
       const wantLeft = inp.left && !inp.right;
       const wantRight = inp.right && !inp.left;
@@ -1063,6 +1080,26 @@ io.on("connection", (socket) => {
     const room = rooms.get(roomId);
     if (!room) return;
     room.game.setInput(socket.id, data || {});
+  });
+
+  // Klient nam posila svou pozici - server ji ulozi pro broadcast
+  socket.on("position", (data) => {
+    const roomId = socketRoom.get(socket.id);
+    const room = rooms.get(roomId);
+    if (!room) return;
+    const p = room.game.players.get(socket.id);
+    if (!p || !p.alive || p.isBot) return;
+    const x = Number(data?.x);
+    const y = Number(data?.y);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    // Lehka anti-cheat: jen v rozumnem rozsahu mapy
+    p.x = Math.max(-100, Math.min(SHARED.WORLD_WIDTH + 100, x));
+    p.y = Math.max(-200, Math.min(SHARED.PLAYER.DEATH_Y + 200, y));
+    p.facing = data?.facing >= 0 ? 1 : -1;
+    // Pad mimo mapu = smrt
+    if (p.y > SHARED.PLAYER.DEATH_Y) {
+      room.game.killPlayer(p, null, "fall");
+    }
   });
 
   // Chat - rate limit a max delka
