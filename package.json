@@ -1,7 +1,7 @@
 {
-  "name": "gun-mayhem-clone",
+  "name": "knockfriend",
   "version": "1.0.0",
-  "description": "Multiplayer 2D platform shooter inspired by Gun Mayhem",
+  "description": "Multiplayer 2D platform shooter — KNOCKFRIEND",
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",

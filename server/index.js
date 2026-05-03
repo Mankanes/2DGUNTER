@@ -1,5 +1,5 @@
 // ============================================================
-// Gun Mayhem - Backend
+// KNOCKFRIEND - Backend
 // Vse v jednom souboru: konstanty, herni simulace, server, sockets
 // ============================================================
 
@@ -1217,5 +1217,5 @@ setInterval(() => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`Gun Mayhem server bezi na portu ${PORT}`);
+  console.log(`KNOCKFRIEND server bezi na portu ${PORT}`);
 });

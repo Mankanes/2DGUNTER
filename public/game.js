@@ -1,5 +1,5 @@
 // ============================================================
-// Gun Mayhem - Frontend (klient)
+// KNOCKFRIEND - Frontend (klient)
 // Vse v jednom: menu, lobby, input, render, particles, interpolace
 // ============================================================
 
