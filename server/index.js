@@ -838,7 +838,7 @@ const io = new Server(server, {
 // Pokud neni nastavena, pouzije se default - ZMEN HO!
 // Pouzivani: v chatu napis  /login <heslo>
 // ============================================================
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "martinkuncarA";
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "knockfriend2026";
 
 app.use(express.static(path.join(__dirname, "..", "public")));
 
@@ -936,20 +936,84 @@ io.on("connection", (socket) => {
     room.game.tryStartMatch();
   });
 
-  // Konzolove prikazy (jako CS) - pouze pro adminy
+  // Globalni admin status - per socket (drzime to mimo Game protoze
+  // /login muze fungovat i mimo mistnost)
+  // Pouzivame socket.data aby to bylo dostupne i z joinRoom
+  socket.data.isAdmin = false;
+
+  // Konzolove prikazy (jako CS) - pouze pro adminy (krome /login)
   let nextBotIdNum = 1;
   socket.on("console", (data) => {
-    const roomId = socketRoom.get(socket.id);
-    const room = rooms.get(roomId);
-    if (!room) return sendConsole(socket, "Nejsi v mistnosti", "error");
     const cmd = (data?.cmd || "").toString().trim();
     if (!cmd) return;
 
-    // Admin check - vsechno jine je zakazane
+    // /login funguje VSEM, i mimo mistnost (admin status je per-socket)
+    if (cmd.startsWith("/login ") || cmd.startsWith("login ")) {
+      const password = cmd.replace(/^\/?login\s+/, "").trim();
+      if (password === ADMIN_PASSWORD) {
+        socket.data.isAdmin = true;
+        sendConsole(socket, "✓ Admin status povolen", "ok");
+        // Pokud je v mistnosti, oznam vsem
+        const roomId = socketRoom.get(socket.id);
+        const room = rooms.get(roomId);
+        if (room) {
+          const me = room.game.players.get(socket.id);
+          if (me) {
+            me.isAdmin = true;
+            io.to(roomId).emit("chat", {
+              id: "system",
+              name: "SYSTEM",
+              color: "#ffd700",
+              text: `👑 ${me.name} se stal adminem`,
+              time: Date.now(),
+            });
+            io.to(roomId).emit("room_info", roomInfo(room));
+          }
+        }
+      } else {
+        sendConsole(socket, "✗ Nespravne heslo", "error");
+      }
+      return;
+    }
+
+    if (cmd === "/logout" || cmd === "logout") {
+      if (socket.data.isAdmin) {
+        socket.data.isAdmin = false;
+        sendConsole(socket, "Admin status odebran", "info");
+        const roomId = socketRoom.get(socket.id);
+        const room = rooms.get(roomId);
+        if (room) {
+          const me = room.game.players.get(socket.id);
+          if (me) {
+            me.isAdmin = false;
+            io.to(roomId).emit("room_info", roomInfo(room));
+          }
+        }
+      }
+      return;
+    }
+
+    // Pro vsechny ostatni prikazy musime byt v mistnosti
+    const roomId = socketRoom.get(socket.id);
+    const room = rooms.get(roomId);
+    if (!room) {
+      sendConsole(socket, "Nejsi v mistnosti - pouze /login je dostupny", "error");
+      return;
+    }
+
     const me = room.game.players.get(socket.id);
-    if (!me || !me.isAdmin) {
+    if (!me) return;
+
+    // Sync admin status z global do player objektu
+    if (socket.data.isAdmin && !me.isAdmin) {
+      me.isAdmin = true;
+      io.to(roomId).emit("room_info", roomInfo(room));
+    }
+
+    // Admin check pro vsechny ostatni prikazy
+    if (!me.isAdmin) {
       sendConsole(socket, "✗ Permission denied. Pouze admin muze pouzivat konzoli.", "error");
-      sendConsole(socket, "  Pro prihlaseni napis v chatu: /login <heslo>", "info");
+      sendConsole(socket, "  Pro prihlaseni napis: /login <heslo>", "info");
       return;
     }
 
@@ -960,6 +1024,8 @@ io.on("connection", (socket) => {
     try {
       if (main === "help") {
         sendConsole(socket, "Prikazy:", "info");
+        sendConsole(socket, "  /login <heslo>   - prihlasit se jako admin", "info");
+        sendConsole(socket, "  /logout          - odhlasit se", "info");
         sendConsole(socket, "  bot add [jmeno]  - prida bota", "info");
         sendConsole(socket, "  bot remove       - odebere posledniho bota", "info");
         sendConsole(socket, "  bot clear        - odebere vsechny boty", "info");
@@ -1014,7 +1080,6 @@ io.on("connection", (socket) => {
         sendConsole(socket, `Bot pohyb: ${enable ? "ON" : "OFF"}`, "ok");
       }
       else if (main === "kill") {
-        const me = room.game.players.get(socket.id);
         if (me && me.alive) {
           room.game.killPlayer(me, null, "console");
           sendConsole(socket, "Sebevrazda", "ok");
@@ -1027,7 +1092,6 @@ io.on("connection", (socket) => {
         if (!wep || !SHARED.WEAPONS[wep]) {
           return sendConsole(socket, "Pouziti: give pistol|shotgun|rocket|laser", "error");
         }
-        const me = room.game.players.get(socket.id);
         if (!me || !me.alive) return sendConsole(socket, "Nezijes", "error");
         me.weapon = wep;
         me.ammo = SHARED.WEAPONS[wep].ammo;
@@ -1109,6 +1173,7 @@ io.on("connection", (socket) => {
       const password = text.slice(7).trim();
       if (password === ADMIN_PASSWORD) {
         player.isAdmin = true;
+        socket.data.isAdmin = true;
         // Posli jen tomuto hraci potvrzeni (ostatni neuvidi)
         socket.emit("chat", {
           id: "system",
@@ -1141,6 +1206,7 @@ io.on("connection", (socket) => {
 
     if (text === "/logout" && player.isAdmin) {
       player.isAdmin = false;
+      socket.data.isAdmin = false;
       socket.emit("chat", {
         id: "system",
         name: "SYSTEM",
@@ -1195,6 +1261,10 @@ function joinRoom(socket, roomId, name, ack) {
   if (!p) {
     if (typeof ack === "function") ack({ ok: false, error: "Could not join" });
     return;
+  }
+  // Pokud je socket prihlaseny jako admin, nastav i player.isAdmin
+  if (socket.data && socket.data.isAdmin) {
+    p.isAdmin = true;
   }
   socket.join(roomId);
   socketRoom.set(socket.id, roomId);
