@@ -139,7 +139,9 @@
   // ---------- LOBBY ----------
   const lobbyPlayersEl = document.getElementById("lobby-players");
   const lobbyMapEl = document.getElementById("lobby-map");
+  const lobbyFormatEl = document.getElementById("lobby-format");
   let isReady = false;
+  let currentHostId = null;
 
   document.getElementById("btn-leave").onclick = () => {
     socket.emit("leave_room");
@@ -157,20 +159,43 @@
   lobbyMapEl.onchange = () => {
     socket.emit("change_map", { mapKey: lobbyMapEl.value });
   };
+  lobbyFormatEl.onchange = () => {
+    socket.emit("set_match_settings", { winScore: parseInt(lobbyFormatEl.value) });
+  };
 
   socket.on("room_info", (info) => {
     if (info.id !== roomId) return;
     document.getElementById("lobby-code").textContent = info.id;
     if (lobbyMapEl.value !== info.mapKey) lobbyMapEl.value = info.mapKey;
+
+    // Match format - jen host muze menit
+    currentHostId = info.hostId;
+    const isHost = info.hostId === selfId;
+    if (info.matchSettings && info.matchSettings.winScore) {
+      const ws = String(info.matchSettings.winScore);
+      if (lobbyFormatEl.value !== ws) lobbyFormatEl.value = ws;
+    }
+    lobbyFormatEl.disabled = !isHost;
+    lobbyMapEl.disabled = !isHost;
+    const hostTag = document.getElementById("host-only-tag");
+    if (hostTag) hostTag.style.display = isHost ? "none" : "inline-block";
+
+    // Update lobby hint - winScore z server
+    const winScoreEl = document.getElementById("lobby-win-score");
+    if (winScoreEl && info.matchSettings) {
+      winScoreEl.textContent = info.matchSettings.winScore;
+    }
+
     lobbyPlayersEl.innerHTML = "";
     for (const p of info.players) {
       const row = document.createElement("div");
       row.className = "lobby-player" + (p.ready ? " ready" : "") + (p.isAdmin ? " admin" : "");
       const adminBadge = p.isAdmin ? '<span class="admin-badge">👑</span> ' : '';
+      const hostBadge = p.id === info.hostId ? '<span class="player-host-badge">HOST</span>' : '';
       const nameStyle = p.isAdmin ? 'color: #ffd700' : '';
       row.innerHTML = `
         <div class="swatch" style="background:${p.color};color:${p.color}"></div>
-        <div class="pname" style="${nameStyle}">${adminBadge}${escapeHtml(p.name)}${p.id === selfId ? " (you)" : ""}</div>
+        <div class="pname" style="${nameStyle}">${adminBadge}${escapeHtml(p.name)}${p.id === selfId ? " (you)" : ""}${hostBadge}</div>
         <div class="pready">${p.ready ? "READY" : "..."}</div>
       `;
       lobbyPlayersEl.appendChild(row);

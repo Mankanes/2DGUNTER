@@ -178,6 +178,12 @@ class Game {
     this.matchWinner = null;
     this.pickupSpawnTimer = SHARED.PICKUP.SPAWN_INTERVAL;
     this.tickCount = 0;
+    // Host = prvni hrac, ten muze menit nastaveni
+    this.hostId = null;
+    // Nastaveni matche - host muze v lobby zmenit
+    this.matchSettings = {
+      winScore: SHARED.ROUND.MATCH_WIN_SCORE, // pocet vyhranych kol pro vyhru matche (bo3 = 2, bo5 = 3, bo7 = 4)
+    };
   }
 
   loadMap(mapKey) {
@@ -214,11 +220,37 @@ class Game {
       shotCountWindow: [],
     };
     this.players.set(socketId, player);
+    // Pokud jsme jeste neměli hosta a tohle je realny hrac, je host
+    if (!this.hostId && !isBot) {
+      this.hostId = socketId;
+    }
     return player;
   }
 
   removePlayer(socketId) {
     this.players.delete(socketId);
+    // Pokud odesel host, najdi noveho (prvniho realnyho hrace)
+    if (this.hostId === socketId) {
+      this.hostId = null;
+      for (const [id, p] of this.players) {
+        if (!p.isBot) {
+          this.hostId = id;
+          break;
+        }
+      }
+    }
+  }
+
+  // Host muze zmenit nastaveni matche - jen v lobby
+  setMatchSettings(socketId, settings) {
+    if (this.hostId !== socketId) return false;
+    if (this.phase !== "lobby") return false;
+    if (settings && typeof settings.winScore === "number") {
+      // Povolene hodnoty: 1 (Bo1), 2 (Bo3), 3 (Bo5), 4 (Bo7), 5 (Bo9)
+      const ws = Math.max(1, Math.min(5, Math.round(settings.winScore)));
+      this.matchSettings.winScore = ws;
+    }
+    return true;
   }
 
   setReady(socketId, ready) {
@@ -298,7 +330,7 @@ class Game {
 
     let matchWinner = null;
     for (const p of this.players.values()) {
-      if (p.score >= SHARED.ROUND.MATCH_WIN_SCORE) {
+      if (p.score >= this.matchSettings.winScore) {
         matchWinner = p.id;
         break;
       }
@@ -1015,6 +1047,16 @@ io.on("connection", (socket) => {
     room.game.tryStartMatch();
   });
 
+  // Host muze menit nastaveni matche (jen v lobby)
+  socket.on("set_match_settings", (data) => {
+    const roomId = socketRoom.get(socket.id);
+    const room = rooms.get(roomId);
+    if (!room) return;
+    if (room.game.setMatchSettings(socket.id, data || {})) {
+      io.to(roomId).emit("room_info", roomInfo(room));
+    }
+  });
+
   // Globalni admin status - per socket (drzime to mimo Game protoze
   // /login muze fungovat i mimo mistnost)
   // Pouzivame socket.data aby to bylo dostupne i z joinRoom
@@ -1404,6 +1446,8 @@ function roomInfo(room) {
   return {
     id: room.id, name: room.name,
     mapKey: room.game.mapKey, phase: room.game.phase,
+    hostId: room.game.hostId,
+    matchSettings: { ...room.game.matchSettings },
     players: [...room.game.players.values()].map((p) => ({
       id: p.id, name: p.name, color: p.color,
       ready: p.ready, score: p.score,
