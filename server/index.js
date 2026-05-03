@@ -182,7 +182,8 @@ class Game {
     this.hostId = null;
     // Nastaveni matche - host muze v lobby zmenit
     this.matchSettings = {
-      winScore: SHARED.ROUND.MATCH_WIN_SCORE, // pocet vyhranych kol pro vyhru matche (bo3 = 2, bo5 = 3, bo7 = 4)
+      winScore: SHARED.ROUND.MATCH_WIN_SCORE, // pocet vyhranych kol pro vyhru matche
+      phoneOnly: false, // pokud true, jen mobilni hraci se mohou pripojit
     };
   }
 
@@ -246,9 +247,12 @@ class Game {
     if (this.hostId !== socketId) return false;
     if (this.phase !== "lobby") return false;
     if (settings && typeof settings.winScore === "number") {
-      // Povolene hodnoty: 1 (Bo1), 2 (Bo3), 3 (Bo5), 4 (Bo7), 5 (Bo9)
-      const ws = Math.max(1, Math.min(5, Math.round(settings.winScore)));
+      // Povolene hodnoty: 1 az 10 winu
+      const ws = Math.max(1, Math.min(10, Math.round(settings.winScore)));
       this.matchSettings.winScore = ws;
+    }
+    if (settings && typeof settings.phoneOnly === "boolean") {
+      this.matchSettings.phoneOnly = settings.phoneOnly;
     }
     return true;
   }
@@ -986,6 +990,7 @@ io.on("connection", (socket) => {
 
   socket.on("hello", (data, ack) => {
     playerName = (data?.name || "Player").toString().slice(0, 16);
+    socket.data.isTouch = !!data?.isTouch;
 
     // Auto-login pokud klient ma platny admin token
     if (data?.adminToken && validateAdminToken(data.adminToken)) {
@@ -1389,6 +1394,13 @@ function joinRoom(socket, roomId, name, ack) {
   const room = rooms.get(roomId);
   if (!room) {
     if (typeof ack === "function") ack({ ok: false, error: "Room not found" });
+    return;
+  }
+
+  // Phone-only mode - povolen jen pokud je klient na touch zarizeni
+  // (host se vlastniho omezeni zbavi pres /logout/restart, ale pokud nastavi phoneOnly, musi byt taky touch)
+  if (room.game.matchSettings.phoneOnly && !socket.data?.isTouch) {
+    if (typeof ack === "function") ack({ ok: false, error: "This room is phone-only. Open on a mobile device." });
     return;
   }
 

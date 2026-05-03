@@ -198,15 +198,33 @@
               <option value="chasm">Chasm</option>
             </select>
           </div>
-          <div>
-            <div class="label">MATCH FORMAT <span id="host-only-tag" class="host-tag">Host only</span></div>
-            <select id="lobby-format">
-              <option value="1">Bo1 (1 win)</option>
-              <option value="2">Bo3 (2 wins)</option>
-              <option value="3" selected>Bo5 (3 wins)</option>
-              <option value="4">Bo7 (4 wins)</option>
-              <option value="5">Bo9 (5 wins)</option>
-            </select>
+        </div>
+
+        <div class="lobby-settings">
+          <div class="setting-row">
+            <div class="setting-label">
+              ROUNDS TO WIN
+              <span id="host-only-tag-1" class="host-tag">Host only</span>
+            </div>
+            <div class="win-buttons" id="win-buttons">
+              <button class="win-btn" data-wins="1">1</button>
+              <button class="win-btn" data-wins="2">2</button>
+              <button class="win-btn active" data-wins="3">3</button>
+              <button class="win-btn" data-wins="5">5</button>
+              <button class="win-btn" data-wins="7">7</button>
+              <button class="win-btn" data-wins="10">10</button>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-label">
+              PHONE ONLY MODE
+              <span id="host-only-tag-2" class="host-tag">Host only</span>
+            </div>
+            <button id="phone-only-toggle" class="toggle-btn">
+              <span class="toggle-state">OFF</span>
+              <span class="toggle-hint">Allow only mobile players</span>
+            </button>
           </div>
         </div>
 

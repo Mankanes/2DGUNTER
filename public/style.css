@@ -1587,3 +1587,112 @@ body.has-touch .minimap {
   margin-left: 6px;
   font-weight: 700;
 }
+
+/* ======================= LOBBY SETTINGS (winy + phone only) ======================= */
+.lobby-settings {
+  background: rgba(10, 14, 26, 0.5);
+  border: 1px solid #2a3a5a;
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin: 16px 0 8px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.setting-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.setting-label {
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  color: #94a3c4;
+  text-transform: uppercase;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+}
+
+/* Win number buttons */
+.win-buttons {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.win-btn {
+  flex: 1;
+  min-width: 44px;
+  padding: 10px 8px;
+  background: rgba(20, 26, 44, 0.6);
+  border: 2px solid #2a3a5a;
+  border-radius: 8px;
+  color: #94a3c4;
+  font-size: 16px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+.win-btn:hover:not(:disabled) {
+  border-color: #54e0ff;
+  color: #fff;
+}
+.win-btn.active {
+  background: rgba(255, 230, 109, 0.15);
+  border-color: #ffe66d;
+  color: #ffe66d;
+  box-shadow: 0 0 12px rgba(255, 230, 109, 0.25);
+}
+.win-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Toggle button (phone only) */
+.toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: rgba(20, 26, 44, 0.6);
+  border: 2px solid #2a3a5a;
+  border-radius: 8px;
+  color: #94a3c4;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+  text-align: left;
+}
+.toggle-btn:hover:not(:disabled) {
+  border-color: #54e0ff;
+}
+.toggle-btn.active {
+  background: rgba(255, 94, 61, 0.15);
+  border-color: #ff5e3d;
+  color: #ff5e3d;
+}
+.toggle-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.toggle-state {
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 1.5px;
+  min-width: 32px;
+}
+.toggle-btn.active .toggle-state {
+  color: #ff5e3d;
+}
+.toggle-hint {
+  font-size: 11px;
+  color: #5a6a90;
+  letter-spacing: 0.5px;
+}
+.toggle-btn.active .toggle-hint {
+  color: rgba(255, 94, 61, 0.7);
+}

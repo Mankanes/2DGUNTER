@@ -68,7 +68,8 @@
     const n = nameInput.value.trim() || "Player";
     localStorage.setItem("gm_name", n);
     const adminToken = localStorage.getItem("kf_admin_token") || null;
-    socket.emit("hello", { name: n, adminToken });
+    const isTouch = ("ontouchstart" in window) || navigator.maxTouchPoints > 0;
+    socket.emit("hello", { name: n, adminToken, isTouch });
   }
 
   // Server posila novy token pri uspesnem login
@@ -128,7 +129,8 @@
 
   // Pri prvnim pripojeni posli token (pokud existuje) pro auto-login
   const savedAdminToken = localStorage.getItem("kf_admin_token") || null;
-  socket.emit("hello", { name: nameInput.value, adminToken: savedAdminToken }, (resp) => {
+  const isTouchInit = ("ontouchstart" in window) || navigator.maxTouchPoints > 0;
+  socket.emit("hello", { name: nameInput.value, adminToken: savedAdminToken, isTouch: isTouchInit }, (resp) => {
     if (resp?.isAdmin) {
       // Server nas overil jako admina - krátke potvrzeni v konzoli
       console.log("[KNOCKFRIEND] Auto-login as admin (token valid)");
@@ -139,7 +141,8 @@
   // ---------- LOBBY ----------
   const lobbyPlayersEl = document.getElementById("lobby-players");
   const lobbyMapEl = document.getElementById("lobby-map");
-  const lobbyFormatEl = document.getElementById("lobby-format");
+  const winButtonsEl = document.getElementById("win-buttons");
+  const phoneOnlyToggle = document.getElementById("phone-only-toggle");
   let isReady = false;
   let currentHostId = null;
 
@@ -159,8 +162,21 @@
   lobbyMapEl.onchange = () => {
     socket.emit("change_map", { mapKey: lobbyMapEl.value });
   };
-  lobbyFormatEl.onchange = () => {
-    socket.emit("set_match_settings", { winScore: parseInt(lobbyFormatEl.value) });
+
+  // Win buttons - host muze menit pocet vyhranych kol
+  document.querySelectorAll(".win-btn").forEach((btn) => {
+    btn.onclick = () => {
+      if (btn.disabled) return;
+      const wins = parseInt(btn.getAttribute("data-wins"));
+      socket.emit("set_match_settings", { winScore: wins });
+    };
+  });
+
+  // Phone only toggle
+  phoneOnlyToggle.onclick = () => {
+    if (phoneOnlyToggle.disabled) return;
+    const newState = !phoneOnlyToggle.classList.contains("active");
+    socket.emit("set_match_settings", { phoneOnly: newState });
   };
 
   socket.on("room_info", (info) => {
@@ -168,19 +184,33 @@
     document.getElementById("lobby-code").textContent = info.id;
     if (lobbyMapEl.value !== info.mapKey) lobbyMapEl.value = info.mapKey;
 
-    // Match format - jen host muze menit
+    // Match settings - jen host muze menit
     currentHostId = info.hostId;
     const isHost = info.hostId === selfId;
-    if (info.matchSettings && info.matchSettings.winScore) {
-      const ws = String(info.matchSettings.winScore);
-      if (lobbyFormatEl.value !== ws) lobbyFormatEl.value = ws;
-    }
-    lobbyFormatEl.disabled = !isHost;
     lobbyMapEl.disabled = !isHost;
-    const hostTag = document.getElementById("host-only-tag");
-    if (hostTag) hostTag.style.display = isHost ? "none" : "inline-block";
 
-    // Update lobby hint - winScore z server
+    // Update win buttons
+    if (info.matchSettings) {
+      const ws = info.matchSettings.winScore;
+      document.querySelectorAll(".win-btn").forEach((btn) => {
+        const w = parseInt(btn.getAttribute("data-wins"));
+        btn.classList.toggle("active", w === ws);
+        btn.disabled = !isHost;
+      });
+
+      // Phone-only toggle stav
+      const phoneOn = !!info.matchSettings.phoneOnly;
+      phoneOnlyToggle.classList.toggle("active", phoneOn);
+      phoneOnlyToggle.querySelector(".toggle-state").textContent = phoneOn ? "ON" : "OFF";
+      phoneOnlyToggle.disabled = !isHost;
+    }
+
+    // Update host-only tagy
+    document.querySelectorAll(".host-tag").forEach((tag) => {
+      tag.style.display = isHost ? "none" : "inline-block";
+    });
+
+    // Update lobby hint
     const winScoreEl = document.getElementById("lobby-win-score");
     if (winScoreEl && info.matchSettings) {
       winScoreEl.textContent = info.matchSettings.winScore;
