@@ -1337,3 +1337,110 @@ body.has-touch .lobby-card {
   max-height: 90dvh;
   overflow-y: auto;
 }
+
+
+/* ======================= MOBILNI HUD - VYLEPSENI ======================= */
+
+/* Schova prilis velky vrchni scoreboard na mobilu - mame tab tlacitko */
+body.has-touch .scoreboard {
+  display: none;
+}
+
+/* Skryje "Pistol ∞" textove zobrazeni - vidime to na zvyraznene zbrani */
+body.has-touch .weapon-info {
+  display: none !important;
+}
+
+/* Zbrane preusporadovat - umisti je vlevo dole nad sipkami a jumpem,
+   nebo dole vystredene aby se nemichali s mirenim */
+body.has-touch .mobile-weapons {
+  top: auto;
+  bottom: calc(16px + var(--safe-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+}
+body.has-touch .mbtn-weapon {
+  width: 52px;
+  height: 52px;
+  font-size: 16px;
+  background: rgba(20, 26, 44, 0.85);
+  border: 2px solid #2a3a5a;
+  border-radius: 10px;
+}
+
+/* Round info preusporadat - nahoru vlevo (vedle settings) */
+body.has-touch .round-info {
+  top: calc(12px + var(--safe-top));
+  left: calc(76px + var(--safe-left));
+  right: auto;
+  font-size: 12px;
+  background: rgba(0,0,0,0.55);
+  padding: 6px 10px;
+  border-radius: 8px;
+}
+
+/* Killfeed dolu doleva, mimo cestu */
+body.has-touch .killfeed {
+  top: auto;
+  bottom: calc(80px + var(--safe-bottom));
+  right: auto;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  text-align: center;
+}
+
+/* Vrchni rohove tlacitka - vetsi mezery */
+body.has-touch .mobile-top-buttons {
+  gap: 10px;
+}
+
+/* Layout sipek a jumpu zmensit a posunout vys aby zbyl prostor pro zbrane */
+body.has-touch .mobile-left {
+  bottom: calc(80px + var(--safe-bottom));
+}
+body.has-touch .mobile-right {
+  bottom: calc(80px + var(--safe-bottom));
+}
+
+/* Velky landscape mobil */
+@media (max-width: 1100px) and (orientation: landscape) {
+  body.has-touch .mbtn { width: 64px; height: 64px; font-size: 24px; }
+  body.has-touch .aim-joystick { width: 140px; height: 140px; }
+  body.has-touch .aim-joystick-stick { width: 52px; height: 52px; margin-top: -26px; margin-left: -26px; }
+}
+
+/* Stredni landscape mobil */
+@media (max-width: 850px) and (orientation: landscape) {
+  body.has-touch .mbtn { width: 58px; height: 58px; font-size: 22px; }
+  body.has-touch .aim-joystick { width: 130px; height: 130px; }
+  body.has-touch .aim-joystick-stick { width: 50px; height: 50px; margin-top: -25px; margin-left: -25px; }
+  body.has-touch .mobile-arrow-row { gap: 10px; }
+  body.has-touch .mobile-jump-row { margin-bottom: -2px; }
+  body.has-touch .mbtn-weapon { width: 44px; height: 44px; font-size: 14px; }
+  body.has-touch .mobile-left { bottom: calc(70px + var(--safe-bottom)); left: calc(16px + var(--safe-left)); }
+  body.has-touch .mobile-right { bottom: calc(70px + var(--safe-bottom)); right: calc(16px + var(--safe-right)); }
+}
+
+/* Maly landscape mobil */
+@media (max-width: 700px) and (orientation: landscape) {
+  body.has-touch .mbtn { width: 52px; height: 52px; font-size: 20px; border-width: 2px; }
+  body.has-touch .mobile-left { gap: 8px; }
+  body.has-touch .mobile-arrow-row { gap: 8px; }
+  body.has-touch .aim-joystick { width: 110px; height: 110px; }
+  body.has-touch .aim-joystick-stick { width: 44px; height: 44px; margin-top: -22px; margin-left: -22px; }
+  body.has-touch .mbtn-weapon { width: 40px; height: 40px; font-size: 13px; }
+  body.has-touch .mbtn-icon { width: 36px; height: 36px; font-size: 15px; }
+  body.has-touch .btn-settings { width: 36px; height: 36px; font-size: 16px; }
+  body.has-touch .mobile-left { bottom: calc(60px + var(--safe-bottom)); left: calc(12px + var(--safe-left)); }
+  body.has-touch .mobile-right { bottom: calc(60px + var(--safe-bottom)); right: calc(12px + var(--safe-right)); }
+  body.has-touch .mobile-weapons { gap: 4px; bottom: calc(10px + var(--safe-bottom)); }
+}
+
+/* Joystick hint label na mobilu menší aby nezabíralo místo */
+body.has-touch .aim-joystick-hint {
+  font-size: 9px;
+  bottom: -16px;
+}
