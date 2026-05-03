@@ -44,8 +44,19 @@
   function saveName() {
     const n = nameInput.value.trim() || "Player";
     localStorage.setItem("gm_name", n);
-    socket.emit("hello", { name: n });
+    const adminToken = localStorage.getItem("kf_admin_token") || null;
+    socket.emit("hello", { name: n, adminToken });
   }
+
+  // Server posila novy token pri uspesnem login
+  socket.on("admin_token", (data) => {
+    if (data?.token) {
+      localStorage.setItem("kf_admin_token", data.token);
+    } else {
+      // Logout - smaz token
+      localStorage.removeItem("kf_admin_token");
+    }
+  });
 
   function refreshRooms() {
     fetch("/api/rooms")
@@ -92,7 +103,13 @@
     showScreen("lobby");
   }
 
-  socket.emit("hello", { name: nameInput.value }, () => {
+  // Pri prvnim pripojeni posli token (pokud existuje) pro auto-login
+  const savedAdminToken = localStorage.getItem("kf_admin_token") || null;
+  socket.emit("hello", { name: nameInput.value, adminToken: savedAdminToken }, (resp) => {
+    if (resp?.isAdmin) {
+      // Server nas overil jako admina - krátke potvrzeni v konzoli
+      console.log("[KNOCKFRIEND] Auto-login as admin (token valid)");
+    }
     refreshRooms();
   });
 

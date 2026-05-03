@@ -842,6 +842,53 @@ const io = new Server(server, {
 // ============================================================
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "knockfriend2026";
 
+// Aktivni admin tokeny - in-memory, vyprši pri restartu serveru
+// Format: token -> { createdAt, lastUsedAt }
+const adminTokens = new Map();
+const TOKEN_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000; // 30 dni
+
+function generateAdminToken() {
+  // Random token - 32 znaku
+  const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let token = "";
+  for (let i = 0; i < 32; i++) {
+    token += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return token;
+}
+
+function createAdminToken() {
+  const token = generateAdminToken();
+  adminTokens.set(token, {
+    createdAt: Date.now(),
+    lastUsedAt: Date.now(),
+  });
+  // Cleanup starych tokenu
+  const now = Date.now();
+  for (const [t, data] of adminTokens) {
+    if (now - data.lastUsedAt > TOKEN_LIFETIME_MS) {
+      adminTokens.delete(t);
+    }
+  }
+  return token;
+}
+
+function validateAdminToken(token) {
+  if (!token || typeof token !== "string") return false;
+  const data = adminTokens.get(token);
+  if (!data) return false;
+  if (Date.now() - data.lastUsedAt > TOKEN_LIFETIME_MS) {
+    adminTokens.delete(token);
+    return false;
+  }
+  data.lastUsedAt = Date.now();
+  return true;
+}
+
+function revokeAdminToken(token) {
+  if (token) adminTokens.delete(token);
+}
+
 app.use(express.static(path.join(__dirname, "..", "public")));
 
 app.get("/api/rooms", (_req, res) => {
@@ -907,9 +954,17 @@ io.on("connection", (socket) => {
 
   socket.on("hello", (data, ack) => {
     playerName = (data?.name || "Player").toString().slice(0, 16);
+
+    // Auto-login pokud klient ma platny admin token
+    if (data?.adminToken && validateAdminToken(data.adminToken)) {
+      socket.data.isAdmin = true;
+      socket.data.adminToken = data.adminToken;
+    }
+
     if (typeof ack === "function") {
       ack({
         ok: true, id: socket.id,
+        isAdmin: !!socket.data.isAdmin,
         rooms: [...rooms.values()].map((r) => ({
           id: r.id, name: r.name,
           playerCount: r.game.players.size,
@@ -976,7 +1031,11 @@ io.on("connection", (socket) => {
       const password = cmd.replace(/^\/?login\s+/, "").trim();
       if (password === ADMIN_PASSWORD) {
         socket.data.isAdmin = true;
-        sendConsole(socket, "✓ Admin status povolen", "ok");
+        // Vytvor token a posli ho klientovi
+        const token = createAdminToken();
+        socket.data.adminToken = token;
+        socket.emit("admin_token", { token });
+        sendConsole(socket, "✓ Admin status povolen (zapamatovano)", "ok");
         // Pokud je v mistnosti, oznam vsem
         const roomId = socketRoom.get(socket.id);
         const room = rooms.get(roomId);
@@ -1003,6 +1062,9 @@ io.on("connection", (socket) => {
     if (cmd === "/logout" || cmd === "logout") {
       if (socket.data.isAdmin) {
         socket.data.isAdmin = false;
+        revokeAdminToken(socket.data.adminToken);
+        socket.data.adminToken = null;
+        socket.emit("admin_token", { token: null }); // klient si smaze
         sendConsole(socket, "Admin status odebran", "info");
         const roomId = socketRoom.get(socket.id);
         const room = rooms.get(roomId);
@@ -1198,12 +1260,16 @@ io.on("connection", (socket) => {
       if (password === ADMIN_PASSWORD) {
         player.isAdmin = true;
         socket.data.isAdmin = true;
+        // Vytvor token a posli ho klientovi
+        const token = createAdminToken();
+        socket.data.adminToken = token;
+        socket.emit("admin_token", { token });
         // Posli jen tomuto hraci potvrzeni (ostatni neuvidi)
         socket.emit("chat", {
           id: "system",
           name: "SYSTEM",
           color: "#ffd700",
-          text: `✓ Admin status povolen pro ${player.name}`,
+          text: `✓ Admin status povolen pro ${player.name} (zapamatovano)`,
           time: now,
         });
         // A vsem oznam ze je novy admin (bez hesla)
@@ -1231,6 +1297,9 @@ io.on("connection", (socket) => {
     if (text === "/logout" && player.isAdmin) {
       player.isAdmin = false;
       socket.data.isAdmin = false;
+      revokeAdminToken(socket.data.adminToken);
+      socket.data.adminToken = null;
+      socket.emit("admin_token", { token: null });
       socket.emit("chat", {
         id: "system",
         name: "SYSTEM",
