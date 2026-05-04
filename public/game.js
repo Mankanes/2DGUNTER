@@ -749,10 +749,6 @@
     left: "a",
     right: "d",
     jump: "w",
-    weapon1: "1",
-    weapon2: "2",
-    weapon3: "3",
-    weapon4: "4",
     chat: "z",
     console: "`",
   };
@@ -841,11 +837,7 @@
     if (e.key === "ArrowLeft") { input.left = true; e.preventDefault(); }
     if (e.key === "ArrowRight") { input.right = true; e.preventDefault(); }
 
-    // Zbrane
-    if (action === "weapon1") input.switch = "pistol";
-    else if (action === "weapon2") input.switch = "shotgun";
-    else if (action === "weapon3") input.switch = "rocket";
-    else if (action === "weapon4") input.switch = "laser";
+    // Zbrane se nedaji prepinat - dostanes je z pickupu
   });
 
   document.addEventListener("keyup", (e) => {
@@ -1088,20 +1080,6 @@
     btn.addEventListener("mousedown", press);
     btn.addEventListener("mouseup", release);
     btn.addEventListener("mouseleave", release);
-  });
-
-  // Tlacitka zbrani
-  document.querySelectorAll(".mbtn-weapon").forEach((btn) => {
-    const w = btn.getAttribute("data-weapon");
-    const press = (e) => {
-      e.preventDefault();
-      input.switch = w;
-      // Vizualne oznacit aktivni (i kdyz se to vyresi i pres state.weapon)
-      document.querySelectorAll(".mbtn-weapon").forEach((b) => b.classList.remove("active"));
-      btn.classList.add("active");
-    };
-    btn.addEventListener("touchstart", press, { passive: false });
-    btn.addEventListener("click", press);
   });
 
   // Vrchni tlacitka - chat a scoreboard
@@ -1995,11 +1973,6 @@
         (self.ammo === -1 ? '<span class="wammo">∞</span>' :
         `<span class="wammo">${self.ammo}</span>`);
       wi.style.display = "flex";
-
-      // Mobil: zvyrazni aktivni zbran v tlacitkach
-      document.querySelectorAll(".mbtn-weapon").forEach((b) => {
-        b.classList.toggle("active", b.getAttribute("data-weapon") === self.weapon);
-      });
     } else {
       wi.style.display = "none";
     }

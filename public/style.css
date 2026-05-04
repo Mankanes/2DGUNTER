@@ -1346,9 +1346,10 @@ body.has-touch .scoreboard {
   display: none;
 }
 
-/* Skryje "Pistol ∞" textove zobrazeni - vidime to na zvyraznene zbrani */
+/* Weapon info - na mobilu zobrazujeme aby hrac videl naboje */
 body.has-touch .weapon-info {
-  display: none !important;
+  font-size: 13px;
+  padding: 6px 10px;
 }
 
 /* Zbrane preusporadovat - umisti je vlevo dole nad sipkami a jumpem,

@@ -536,13 +536,8 @@ class Game {
 
       if (p.onGround) p.jumpsLeft = PL.MAX_JUMPS;
 
-      // Zbranovy switch
-      if (inp.switch && SHARED.WEAPONS[inp.switch]) {
-        if (p.weapon !== inp.switch) {
-          p.weapon = inp.switch;
-          if (p.weapon === "pistol") p.ammo = Infinity;
-        }
-      }
+      // Zbrane se nedaji prepinat - mas pistol nebo to co ti padlo
+      // (input.switch ignorujeme)
 
       // Strelba
       if (allowShoot && inp.shoot) {
