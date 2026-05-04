@@ -1291,16 +1291,25 @@
         if (typeof updateOrientationHint === "function") updateOrientationHint();
       }
     }
-    if (screens.game.classList.contains("active") && snap.phase === "lobby") {
-      // Prechod hra -> lobby: vycisti snapshoty a particles
-      snapshots.length = 0;
-      snapshots.push(snap); // ale ponech aktualni snapshot
-      particles.length = 0;
-      showScreen("lobby");
-      isReady = false;
-      const btn = document.getElementById("btn-ready");
-      btn.textContent = "Ready";
-      btn.classList.remove("ready");
+    // Server hlasi lobby phase - resetuj klientsky stav bez ohledu na screen
+    // (i kdyby uzivatel byl pres "Back to Lobby" tlacitko v menu)
+    if (snap.phase === "lobby") {
+      // Pokud je hrac na game screenu, prepni do lobby
+      if (screens.game.classList.contains("active")) {
+        snapshots.length = 0;
+        snapshots.push(snap);
+        particles.length = 0;
+        showScreen("lobby");
+      }
+      // Resetuj ready stav (server uz me odready'l)
+      if (isReady) {
+        isReady = false;
+        const btn = document.getElementById("btn-ready");
+        if (btn) {
+          btn.textContent = "Ready";
+          btn.classList.remove("ready");
+        }
+      }
     }
 
     handleEvents(snap);
