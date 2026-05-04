@@ -274,6 +274,7 @@
     refreshKeybindsUI();
     refreshCrosshairUI();
     drawCrosshairPreview();
+    refreshSettingsActions();
   }
   function closeSettings() {
     settingsModal.classList.remove("active");
@@ -289,6 +290,49 @@
   settingsModal.addEventListener("click", (e) => {
     if (e.target === settingsModal) closeSettings();
   });
+
+  // Akcni tlacitka v settings - viditelnost podle kontextu
+  const btnBackToLobby = document.getElementById("btn-back-to-lobby");
+  const btnExitToMenu = document.getElementById("btn-exit-to-menu");
+
+  function refreshSettingsActions() {
+    // Tlacitka maji smysl jen kdyz jsi v mistnosti (lobby nebo ve hre)
+    const inGame = screens.game.classList.contains("active");
+    const inLobby = screens.lobby.classList.contains("active");
+    const inRoom = !!roomId;
+
+    // Back to Lobby - jen kdyz jsi ve hre (ve lobby screen uz jsi v lobby)
+    btnBackToLobby.classList.toggle("hidden", !inGame);
+    // Exit to Menu - kdyz jsi v mistnosti (lobby i hra)
+    btnExitToMenu.classList.toggle("hidden", !inRoom);
+  }
+
+  if (btnBackToLobby) {
+    btnBackToLobby.onclick = () => {
+      // Vrat se do lobby aktualni mistnosti (neopusti mistnost!)
+      // Server bezi normalne - hrac jen vidi lobby UI misto game UI
+      // Pri opetovne "ready" muze pokracovat
+      closeSettings();
+      showScreen("lobby");
+    };
+  }
+
+  if (btnExitToMenu) {
+    btnExitToMenu.onclick = () => {
+      // Opusti mistnost uplne a vrati se na uvodni stranku (menu)
+      socket.emit("leave_room");
+      isReady = false;
+      const readyBtn = document.getElementById("btn-ready");
+      if (readyBtn) {
+        readyBtn.textContent = "Ready";
+        readyBtn.classList.remove("ready");
+      }
+      clearChatLogs();
+      closeSettings();
+      showScreen("menu");
+      refreshRooms();
+    };
+  }
 
   // Tab prepinani
   document.querySelectorAll(".settings-tab").forEach((tab) => {

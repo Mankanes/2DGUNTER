@@ -1740,3 +1740,32 @@ body.has-touch .minimap {
   color: rgba(0, 0, 0, 0.7);
   pointer-events: none;
 }
+
+/* ======================= SETTINGS ACTION BUTTONS ======================= */
+.settings-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #2a3a5a;
+}
+.settings-actions .btn {
+  flex: 1;
+  padding: 12px 14px;
+  font-size: 13px;
+  letter-spacing: 1px;
+}
+.settings-actions .btn.danger {
+  background: rgba(255, 94, 61, 0.15);
+  border-color: #ff5e3d;
+  color: #ff5e3d;
+}
+.settings-actions .btn.danger:hover {
+  background: rgba(255, 94, 61, 0.3);
+}
+
+/* Skryt "Back to Lobby" kdyz uzivatel neni v lobby/hre */
+#btn-back-to-lobby.hidden,
+#btn-exit-to-menu.hidden {
+  display: none;
+}
