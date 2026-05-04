@@ -22,6 +22,284 @@
   }
 
   // ---------- MENU ----------
+
+  // Animovane pozadi v menu - mini simulace botu
+  initMenuTrailer();
+
+  function initMenuTrailer() {
+    const canvas = document.getElementById("menu-bg");
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+
+    function resize() {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      canvas.width = w * dpr;
+      canvas.height = h * dpr;
+      canvas.style.width = w + "px";
+      canvas.style.height = h + "px";
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    resize();
+    window.addEventListener("resize", resize);
+
+    // Mini fyzika - vlastni svet
+    const COLORS = ["#ff5e5e", "#5ec8ff", "#7dff7d", "#ffd75e", "#c87dff", "#ff7dc8"];
+    const NAMES = ["NEO", "ZAP", "ARC", "JAX", "REX", "VIO"];
+
+    const platforms = [
+      // Hlavni zem
+      { x: 0, y: 1, w: 1, h: 0.04 },          // procentualne souradnice
+      // Stredni patro
+      { x: 0.15, y: 0.65, w: 0.2, h: 0.025 },
+      { x: 0.65, y: 0.65, w: 0.2, h: 0.025 },
+      // Horni patro
+      { x: 0.35, y: 0.4, w: 0.3, h: 0.025 },
+    ];
+
+    const bots = [];
+    for (let i = 0; i < 4; i++) {
+      bots.push({
+        x: 0.15 + Math.random() * 0.7,
+        y: 0.3,
+        vx: 0,
+        vy: 0,
+        onGround: false,
+        facing: Math.random() > 0.5 ? 1 : -1,
+        color: COLORS[i % COLORS.length],
+        name: NAMES[i % NAMES.length],
+        moveTimer: 0,
+        moveDir: 0,
+        jumpTimer: 0,
+        shootTimer: 0,
+        aimX: 1,
+        aimY: 0,
+        deadUntil: 0,
+      });
+    }
+
+    const bullets = [];
+    const particles = [];
+
+    let lastTime = performance.now();
+    let running = true;
+
+    function tick(now) {
+      const dt = Math.min(0.05, (now - lastTime) / 1000);
+      lastTime = now;
+
+      // Bezi jen kdyz je menu aktivni (jinak setrime CPU)
+      const menuActive = document.getElementById("menu")?.classList.contains("active");
+      if (!menuActive) {
+        requestAnimationFrame(tick);
+        return;
+      }
+
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+
+      // Update botu
+      for (const b of bots) {
+        if (b.deadUntil > now) continue;
+
+        // AI - obcas zmen smer pohybu
+        b.moveTimer -= dt;
+        if (b.moveTimer <= 0) {
+          b.moveDir = Math.random() < 0.4 ? 0 : (Math.random() < 0.5 ? -1 : 1);
+          b.moveTimer = 0.5 + Math.random() * 1.5;
+        }
+        // Skok
+        b.jumpTimer -= dt;
+        if (b.jumpTimer <= 0 && b.onGround && Math.random() < 0.3) {
+          b.vy = -0.55;
+          b.onGround = false;
+          b.jumpTimer = 1.5 + Math.random();
+        }
+        // Strelba
+        b.shootTimer -= dt;
+        if (b.shootTimer <= 0) {
+          // Najdi nejblizsiho jineho bota
+          let target = null, minD = Infinity;
+          for (const o of bots) {
+            if (o === b || o.deadUntil > now) continue;
+            const d = Math.hypot(o.x - b.x, o.y - b.y);
+            if (d < minD) { minD = d; target = o; }
+          }
+          if (target) {
+            const dx = target.x - b.x;
+            const dy = target.y - b.y;
+            const m = Math.hypot(dx, dy) || 1;
+            b.aimX = dx / m;
+            b.aimY = dy / m;
+            b.facing = b.aimX >= 0 ? 1 : -1;
+            // Vystrel
+            bullets.push({
+              x: b.x, y: b.y - 0.02,
+              vx: b.aimX * 1.2,
+              vy: b.aimY * 1.2,
+              life: 1.5,
+              owner: b,
+              color: b.color,
+            });
+          }
+          b.shootTimer = 0.4 + Math.random() * 0.6;
+        }
+
+        // Pohyb
+        const speed = 0.18;
+        if (b.moveDir !== 0) {
+          b.vx = b.moveDir * speed;
+          b.facing = b.moveDir;
+        } else if (b.onGround) {
+          b.vx *= 0.85;
+        }
+
+        // Gravitace
+        b.vy += 1.6 * dt;
+        if (b.vy > 1.0) b.vy = 1.0;
+
+        // Pohyb
+        b.x += b.vx * dt;
+        b.y += b.vy * dt;
+
+        // Hranice
+        if (b.x < 0.02) { b.x = 0.02; b.moveDir = 1; }
+        if (b.x > 0.98) { b.x = 0.98; b.moveDir = -1; }
+
+        // Kolize s platformami
+        b.onGround = false;
+        for (const p of platforms) {
+          const PW = 0.025; // sirka bota
+          const PH = 0.06;
+          if (b.x - PW < p.x + p.w && b.x + PW > p.x &&
+              b.y < p.y + p.h && b.y + PH > p.y) {
+            // Pristal na platforme
+            if (b.vy > 0 && b.y - PH/2 < p.y) {
+              b.y = p.y - PH/2;
+              b.vy = 0;
+              b.onGround = true;
+            }
+          }
+        }
+      }
+
+      // Update strel
+      for (let i = bullets.length - 1; i >= 0; i--) {
+        const bl = bullets[i];
+        bl.x += bl.vx * dt;
+        bl.y += bl.vy * dt;
+        bl.life -= dt;
+        if (bl.life <= 0 || bl.x < 0 || bl.x > 1 || bl.y > 1) {
+          bullets.splice(i, 1);
+          continue;
+        }
+        // Kolize s boty
+        for (const b of bots) {
+          if (b === bl.owner) continue;
+          if (b.deadUntil > now) continue;
+          const dx = b.x - bl.x;
+          const dy = b.y - bl.y;
+          if (Math.hypot(dx, dy) < 0.025) {
+            // Hit - bot "zemre" na chvili a respawnne
+            b.deadUntil = now + 800;
+            // Particle explosion
+            for (let j = 0; j < 8; j++) {
+              particles.push({
+                x: b.x, y: b.y,
+                vx: (Math.random() - 0.5) * 0.5,
+                vy: (Math.random() - 0.5) * 0.5,
+                life: 0.6,
+                color: b.color,
+              });
+            }
+            // Respawn po chvili
+            setTimeout(() => {
+              if (!running) return;
+              b.x = 0.15 + Math.random() * 0.7;
+              b.y = 0.3;
+              b.vx = 0;
+              b.vy = 0;
+            }, 800);
+            bullets.splice(i, 1);
+            break;
+          }
+        }
+      }
+
+      // Update particle
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.life -= dt;
+        if (p.life <= 0) particles.splice(i, 1);
+      }
+
+      // Render
+      ctx.clearRect(0, 0, w, h);
+
+      // Platformy (modré)
+      ctx.fillStyle = "rgba(64, 96, 160, 0.4)";
+      for (const p of platforms) {
+        ctx.fillRect(p.x * w, p.y * h, p.w * w, p.h * h);
+      }
+
+      // Strely
+      for (const bl of bullets) {
+        ctx.fillStyle = bl.color;
+        ctx.shadowColor = bl.color;
+        ctx.shadowBlur = 8;
+        ctx.beginPath();
+        ctx.arc(bl.x * w, bl.y * h, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+
+      // Particles
+      for (const p of particles) {
+        ctx.fillStyle = p.color;
+        ctx.globalAlpha = p.life;
+        ctx.beginPath();
+        ctx.arc(p.x * w, p.y * h, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+
+      // Boti
+      for (const b of bots) {
+        if (b.deadUntil > now) continue;
+        const px = b.x * w;
+        const py = b.y * h;
+        const bw = 28, bh = 36;
+
+        ctx.fillStyle = b.color;
+        ctx.fillRect(px - bw/2, py - bh, bw, bh);
+
+        // Oci
+        ctx.fillStyle = "#fff";
+        const eyeX = px + (b.facing === 1 ? 4 : -8);
+        ctx.fillRect(eyeX, py - bh + 8, 5, 5);
+        ctx.fillStyle = "#000";
+        ctx.fillRect(eyeX + (b.facing === 1 ? 2 : 0), py - bh + 9, 2, 3);
+
+        // Zbran (cara ve smeru aim)
+        ctx.strokeStyle = "#444";
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(px, py - bh/2);
+        ctx.lineTo(px + b.aimX * 18, py - bh/2 + b.aimY * 18);
+        ctx.stroke();
+      }
+
+      requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+
+    // Cleanup pri opusteni
+    window.addEventListener("beforeunload", () => { running = false; });
+  }
+
   const nameInput = document.getElementById("name-input");
   nameInput.value = localStorage.getItem("gm_name") || "Player" + Math.floor(Math.random() * 99);
 
