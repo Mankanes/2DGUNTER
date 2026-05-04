@@ -1207,11 +1207,15 @@
     const self = getInterpolatedSelf();
     let aimX = 1, aimY = 0;
 
-    if (joystick.active) {
-      // Mobilni joystick - aim podle smeru tahnuti
-      aimX = joystick.aimX;
-      aimY = joystick.aimY;
-    } else if (self) {
+    if (aimJoy.active) {
+      // Mobilni joystick aktivni
+      aimX = aimJoy.aimX;
+      aimY = aimJoy.aimY;
+    } else if (isTouchDevice) {
+      // Mobil - joystick neaktivni, pouzij posledni smer (zbran zustane otocena)
+      aimX = aimJoy.aimX;
+      aimY = aimJoy.aimY;
+    } else if (self && mouseX >= 0) {
       // PC - aim podle pozice mysi
       const cam = computeCamera();
       const sx = (self.x + SHARED.PLAYER.WIDTH / 2 - cam.x) * cam.scale;
@@ -1610,6 +1614,20 @@
     if (mouseX >= 0 && mouseY >= 0 &&
         mouseX <= cw && mouseY <= ch) {
       drawCrosshair(ctx, mouseX, mouseY);
+    } else if (aimJoy && aimJoy.active && SHARED) {
+      // Mobile: kdyz mirime joystickem, kresli crosshair pred postavou
+      const self = state.players.find((p) => p.id === selfId);
+      if (self && self.alive) {
+        const cam = computeCamera();
+        // Pozice postavy ve screen coords
+        const psx = (self.x + SHARED.PLAYER.WIDTH / 2 - cam.x) * cam.scale;
+        const psy = (self.y + SHARED.PLAYER.HEIGHT * 0.4 - cam.y) * cam.scale;
+        // Crosshair v dali ve smeru mireni
+        const dist = 200; // vzdalenost crosshairu od postavy
+        const cx = psx + aimJoy.aimX * dist;
+        const cy = psy + aimJoy.aimY * dist;
+        drawCrosshair(ctx, cx, cy);
+      }
     }
 
     // Minimapa (jen mobil)
@@ -1778,15 +1796,26 @@
 
     let aimX, aimY;
     if (p.id === selfId) {
-      if (joystick.active) {
-        aimX = joystick.aimX;
-        aimY = joystick.aimY;
-      } else {
+      if (aimJoy.active) {
+        // Mobil - joystick aktivni
+        aimX = aimJoy.aimX;
+        aimY = aimJoy.aimY;
+      } else if (isTouchDevice) {
+        // Mobil - joystick neni aktivni, pouzij posledni aim (ne facing!)
+        // aimJoy.aimX/aimY se resetuji jen pri novem touch
+        aimX = aimJoy.aimX;
+        aimY = aimJoy.aimY;
+      } else if (mouseX >= 0) {
+        // PC - aim podle mysi
         const cam = computeCamera();
         const sx = (cx - cam.x) * cam.scale;
         const sy = (cy - cam.y) * cam.scale;
         aimX = mouseX - sx;
         aimY = mouseY - sy;
+      } else {
+        // Fallback - pouzij smer postavy
+        aimX = p.facing;
+        aimY = 0;
       }
     } else {
       aimX = p.facing;
