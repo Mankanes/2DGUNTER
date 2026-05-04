@@ -146,6 +146,9 @@
   const colorPickerEl = document.getElementById("color-picker");
   let isReady = false;
   let currentHostId = null;
+  // Flag: hrac se chce divat na lobby (i kdyz hra zrovna bezi)
+  // Nastavi se pres "Back to Lobby" tlacitko, vypne se pri Ready nebo Leave
+  let userPreferLobby = false;
 
   // Vybudovat color picker - bude prepsano az pridem SHARED.COLORS
   function buildColorPicker(colors, myColor, takenColors) {
@@ -172,12 +175,14 @@
   document.getElementById("btn-leave").onclick = () => {
     socket.emit("leave_room");
     isReady = false;
+    userPreferLobby = false;
     clearChatLogs();
     showScreen("menu");
     refreshRooms();
   };
   document.getElementById("btn-ready").onclick = () => {
     isReady = !isReady;
+    if (isReady) userPreferLobby = false; // chce zase hrat
     socket.emit("ready", { ready: isReady });
     document.getElementById("btn-ready").textContent = isReady ? "Cancel" : "Ready";
     document.getElementById("btn-ready").classList.toggle("ready", isReady);
@@ -311,7 +316,7 @@
     btnBackToLobby.onclick = () => {
       // Vrat se do lobby aktualni mistnosti (neopusti mistnost!)
       // Server bezi normalne - hrac jen vidi lobby UI misto game UI
-      // Pri opetovne "ready" muze pokracovat
+      userPreferLobby = true;
       closeSettings();
       showScreen("lobby");
     };
@@ -322,6 +327,7 @@
       // Opusti mistnost uplne a vrati se na uvodni stranku (menu)
       socket.emit("leave_room");
       isReady = false;
+      userPreferLobby = false;
       const readyBtn = document.getElementById("btn-ready");
       if (readyBtn) {
         readyBtn.textContent = "Ready";
@@ -1283,7 +1289,7 @@
     while (snapshots.length > 120) snapshots.shift();
 
     if (screens.lobby.classList.contains("active")) {
-      if (snap.phase !== "lobby") {
+      if (snap.phase !== "lobby" && !userPreferLobby) {
         // Prechod lobby -> hra: vycisti stare particles
         particles.length = 0;
         showScreen("game");
