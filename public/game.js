@@ -689,6 +689,10 @@
   const savedAdminToken = localStorage.getItem("kf_admin_token") || null;
   const isTouchInit = ("ontouchstart" in window) || navigator.maxTouchPoints > 0;
   socket.emit("hello", { name: nameInput.value, adminToken: savedAdminToken, isTouch: isTouchInit }, (resp) => {
+    if (resp?.shared) {
+      // SHARED dostaneme uz pri hello - umozni trailer simulaci v menu
+      SHARED = resp.shared;
+    }
     if (resp?.isAdmin) {
       // Server nas overil jako admina - krátke potvrzeni v konzoli
       console.log("[KNOCKFRIEND] Auto-login as admin (token valid)");

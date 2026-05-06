@@ -1053,6 +1053,7 @@ io.on("connection", (socket) => {
       ack({
         ok: true, id: socket.id,
         isAdmin: !!socket.data.isAdmin,
+        shared: serializeShared(),
         rooms: [...rooms.values()].map((r) => ({
           id: r.id, name: r.name,
           playerCount: r.game.players.size,
