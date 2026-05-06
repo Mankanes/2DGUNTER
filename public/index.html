@@ -21,43 +21,58 @@
       <!-- Animovany trailer canvas na pozadi -->
       <canvas id="menu-bg" class="menu-bg"></canvas>
 
-      <div class="logo">
-        <span class="logo-text">KNOCKFRIEND</span>
+      <div class="menu-hero">
+        <div class="logo">
+          <span class="logo-text">KNOCKFRIEND</span>
+        </div>
+        <div class="tagline">Multiplayer platform mayhem · 2-8 players · Made in <span class="cz-flag">🇨🇿</span></div>
+        <div class="online-stats">
+          <span class="stat-dot"></span>
+          <span id="online-count">— players online</span>
+        </div>
       </div>
 
       <div class="menu-card">
         <label>Your nickname</label>
         <input id="name-input" type="text" maxlength="16" placeholder="Player" />
 
-        <div class="menu-row">
-          <button id="btn-quickplay" class="btn primary">Quick Play</button>
-        </div>
+        <button id="btn-quickplay" class="btn primary big">
+          <span class="btn-icon">⚡</span>
+          <span class="btn-label">Quick Play</span>
+          <span class="btn-sub">Jump into a random match</span>
+        </button>
 
         <div class="divider"><span>or</span></div>
 
-        <div class="menu-row">
-          <button id="btn-create" class="btn">Create Room</button>
-        </div>
-
-        <div class="menu-row">
-          <input id="join-code" type="text" maxlength="5" placeholder="ROOM CODE" />
-          <button id="btn-join" class="btn">Join</button>
+        <div class="action-grid">
+          <button id="btn-create" class="btn action-btn">
+            <span class="btn-icon">🏠</span>
+            <span>Create Room</span>
+          </button>
+          <div class="join-group">
+            <input id="join-code" type="text" maxlength="5" placeholder="CODE" />
+            <button id="btn-join" class="btn action-btn">
+              <span class="btn-icon">🚪</span>
+              <span>Join</span>
+            </button>
+          </div>
         </div>
 
         <div class="rooms-section">
           <div class="section-title">
-            Open Rooms
-            <button id="btn-refresh" class="btn-small">Refresh</button>
+            <span>Open Rooms</span>
+            <button id="btn-refresh" class="btn-small">↻ Refresh</button>
           </div>
           <div id="rooms-list" class="rooms-list"></div>
         </div>
       </div>
 
       <div class="menu-footer">
-        Move: <kbd>A</kbd> <kbd>D</kbd> &nbsp; Jump: <kbd>W</kbd> / <kbd>Space</kbd>
-        &nbsp; Aim/Shoot: <kbd>Mouse</kbd>
-        &nbsp; Chat: <kbd>Z</kbd>
-        &nbsp; Console: <kbd>~</kbd>
+        <span class="kb-group"><span class="kb-label">Move</span> <kbd>A</kbd><kbd>D</kbd></span>
+        <span class="kb-group"><span class="kb-label">Jump</span> <kbd>W</kbd></span>
+        <span class="kb-group"><span class="kb-label">Aim</span> <kbd>Mouse</kbd></span>
+        <span class="kb-group"><span class="kb-label">Chat</span> <kbd>Z</kbd></span>
+        <span class="kb-group"><span class="kb-label">Console</span> <kbd>~</kbd></span>
       </div>
     </div>
 
@@ -168,8 +183,8 @@
 
         <!-- Akcni tlacitka -->
         <div class="settings-actions">
-          <button id="btn-back-to-lobby" class="btn">Back to Lobby</button>
-          <button id="btn-exit-to-menu" class="btn danger">Exit to Menu</button>
+          <button id="btn-back-to-lobby" class="btn">← Back to Lobby</button>
+          <button id="btn-exit-to-menu" class="btn danger">⏻ Exit to Menu</button>
         </div>
       </div>
     </div>

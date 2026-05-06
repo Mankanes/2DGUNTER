@@ -548,8 +548,22 @@
       .then((data) => {
         const list = document.getElementById("rooms-list");
         list.innerHTML = "";
+
+        // Update online count
+        const totalPlayers = data.rooms.reduce((sum, r) => sum + r.playerCount, 0);
+        const onlineEl = document.getElementById("online-count");
+        if (onlineEl) {
+          if (totalPlayers === 0) {
+            onlineEl.textContent = "Be the first online!";
+          } else if (totalPlayers === 1) {
+            onlineEl.textContent = "1 player online";
+          } else {
+            onlineEl.textContent = `${totalPlayers} players online`;
+          }
+        }
+
         if (!data.rooms.length) {
-          list.innerHTML = '<div class="room-empty">No open rooms — create one!</div>';
+          // Empty state je v CSS pres :empty pseudo-class
           return;
         }
         for (const r of data.rooms) {
@@ -601,6 +615,13 @@
     }
     refreshRooms();
   });
+
+  // Auto-refresh open rooms a online count kazdych 5 sekund (jen kdyz menu aktivni)
+  setInterval(() => {
+    if (document.getElementById("menu")?.classList.contains("active")) {
+      refreshRooms();
+    }
+  }, 5000);
 
   // ---------- LOBBY ----------
   const lobbyPlayersEl = document.getElementById("lobby-players");
