@@ -1083,6 +1083,7 @@
   const chCanvas = document.getElementById("crosshair-preview");
   const chCtx = chCanvas.getContext("2d");
   const chControls = {
+    enabled: document.getElementById("ch-enabled"),
     style: document.getElementById("ch-style"),
     color: document.getElementById("ch-color"),
     size: document.getElementById("ch-size"),
@@ -1098,6 +1099,7 @@
   };
 
   function refreshCrosshairUI() {
+    chControls.enabled.checked = settings.crosshair.enabled !== false;
     chControls.style.value = settings.crosshair.style;
     chControls.color.value = settings.crosshair.color;
     chControls.size.value = settings.crosshair.size;
@@ -1113,6 +1115,7 @@
   }
 
   function bindCrosshairControls() {
+    chControls.enabled.onchange = () => { settings.crosshair.enabled = chControls.enabled.checked; saveCrosshair(); drawCrosshairPreview(); };
     chControls.style.onchange = () => { settings.crosshair.style = chControls.style.value; saveCrosshair(); drawCrosshairPreview(); };
     chControls.color.oninput = () => { settings.crosshair.color = chControls.color.value; saveCrosshair(); drawCrosshairPreview(); };
     chControls.size.oninput = () => {
@@ -1150,6 +1153,7 @@
   // Vykreslovani crosshairu (sdilena funkce - pouziva se v preview i in-game)
   function drawCrosshair(ctx, cx, cy) {
     const c = settings.crosshair;
+    if (c.enabled === false) return; // crosshair vypnuty v settings
     ctx.save();
     ctx.lineCap = "butt";
 
@@ -1240,6 +1244,15 @@
     chCtx.fillStyle = "rgba(255,255,255,0.03)";
     for (let i = 0; i < 6; i++) {
       chCtx.fillRect(0, i * 40, chCanvas.width, 20);
+    }
+    if (settings.crosshair.enabled === false) {
+      // Misto crosshairu zobraz "DISABLED"
+      chCtx.fillStyle = "#5a6a90";
+      chCtx.font = "bold 16px Segoe UI";
+      chCtx.textAlign = "center";
+      chCtx.textBaseline = "middle";
+      chCtx.fillText("CROSSHAIR DISABLED", chCanvas.width / 2, chCanvas.height / 2);
+      return;
     }
     // Crosshair uprostred
     drawCrosshair(chCtx, chCanvas.width / 2, chCanvas.height / 2);
@@ -1463,6 +1476,7 @@
     console: "`",
   };
   const DEFAULT_CROSSHAIR = {
+    enabled: true,          // crosshair viditelny
     style: "cross",         // cross | dot | circle | t-shape
     color: "#00ff00",
     size: 8,
@@ -1493,8 +1507,16 @@
   }
   function saveCrosshair() {
     localStorage.setItem("kf_crosshair", JSON.stringify(settings.crosshair));
+    updateCanvasCursor();
+  }
+  function updateCanvasCursor() {
+    const c = document.getElementById("canvas");
+    if (!c) return;
+    // Pokud crosshair vypnuty, ukaz default kurzor; jinak schovej (kreslime vlastni)
+    c.style.cursor = settings.crosshair.enabled === false ? "default" : "none";
   }
   loadSettings();
+  updateCanvasCursor();
 
   // Vraci akci (jeden z DEFAULT_KEYBINDS klicu) podle stiskle klavesy
   function actionForKey(key) {
@@ -1902,19 +1924,23 @@
   const ctx = canvas.getContext("2d");
 
   canvas.addEventListener("mousemove", (e) => {
+    if (isTouchDevice) return; // mobile pouziva joystick, ne mys
     const rect = canvas.getBoundingClientRect();
     // CSS souradnice (canvas se renderuje s setTransform(dpr) takze pouzivame CSS pixely)
     mouseX = e.clientX - rect.left;
     mouseY = e.clientY - rect.top;
   });
   canvas.addEventListener("mousedown", (e) => {
+    if (isTouchDevice) return;
     if (e.button === 0) input.shoot = true;
   });
   canvas.addEventListener("mouseup", (e) => {
+    if (isTouchDevice) return;
     if (e.button === 0) input.shoot = false;
   });
   canvas.addEventListener("contextmenu", (e) => e.preventDefault());
   canvas.addEventListener("mouseleave", () => {
+    if (isTouchDevice) return;
     input.shoot = false;
     mouseX = -1; mouseY = -1; // schova crosshair
   });

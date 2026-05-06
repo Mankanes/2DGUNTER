@@ -2371,3 +2371,45 @@ body.has-touch .minimap {
 #auth .menu-hero {
   margin-bottom: 18px;
 }
+
+/* ======================= TOGGLE SWITCH (iOS-style) ======================= */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 48px;
+  height: 26px;
+  cursor: pointer;
+}
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.toggle-slider {
+  position: absolute;
+  inset: 0;
+  background: rgba(20, 26, 44, 0.8);
+  border: 2px solid rgba(74, 144, 226, 0.3);
+  border-radius: 100px;
+  transition: all 0.2s;
+}
+.toggle-slider::before {
+  content: "";
+  position: absolute;
+  height: 18px;
+  width: 18px;
+  left: 2px;
+  top: 2px;
+  background: #94a3c4;
+  border-radius: 50%;
+  transition: all 0.2s;
+}
+.toggle-switch input:checked + .toggle-slider {
+  background: rgba(255, 138, 61, 0.3);
+  border-color: #ff8a3d;
+}
+.toggle-switch input:checked + .toggle-slider::before {
+  transform: translateX(22px);
+  background: #ff8a3d;
+  box-shadow: 0 0 8px rgba(255, 138, 61, 0.5);
+}
