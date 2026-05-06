@@ -44,66 +44,58 @@
     resize();
     window.addEventListener("resize", resize);
 
-    // Pockame na SHARED data ze serveru, pak spustime simulaci s realnou mapou
-    const COLORS = ["#ff5e5e", "#5ec8ff", "#7dff7d", "#ffd75e", "#c87dff", "#ff7dc8"];
-    const NAMES = ["NEO", "ZAP", "ARC", "JAX", "REX", "VIO"];
-    const WEAPONS_LIST = ["pistol", "shotgun", "rocket", "laser"];
+    const COLORS = ["#ff5e5e", "#5ec8ff", "#7dff7d", "#ffd75e"];
+    const NAMES = ["NEO", "ZAP", "ARC", "JAX"];
 
-    let started = false;
     let bots = [];
     let bullets = [];
-    const trailerParticles = [];
-    let mapKey = "skybridge"; // vychozi
-    let mapChangeTimer = 25; // za jak dlouho zmenit mapu
+    let particles = [];
+    let mapKey = "skybridge";
+    let initialized = false;
 
-    function startSimulation() {
-      if (started) return;
-      if (!SHARED || !SHARED.MAPS) return;
-      started = true;
-      respawnAllBots();
+    function spawnBot(i) {
+      const b = {
+        id: i,
+        x: 200 + i * 350,
+        y: 100,
+        vx: 0,
+        vy: 0,
+        facing: i % 2 === 0 ? 1 : -1,
+        color: COLORS[i],
+        name: NAMES[i],
+        alive: true,
+        hp: 100,
+        onGround: false,
+        weapon: "pistol",
+        aimX: i % 2 === 0 ? 1 : -1,
+        aimY: 0,
+        moveDir: 0,
+        moveTimer: 0,
+        jumpTimer: 0,
+        shootTimer: 0.5 + Math.random() * 0.5,
+        respawnAt: 0,
+      };
+      // Pokud mame mapu, pouzij jeji spawn
+      if (SHARED && SHARED.MAPS && SHARED.MAPS[mapKey]) {
+        const sp = SHARED.MAPS[mapKey].spawns[i % SHARED.MAPS[mapKey].spawns.length];
+        b.x = sp.x;
+        b.y = sp.y;
+      }
+      return b;
     }
 
-    function respawnAllBots() {
+    function initBots() {
       bots = [];
-      const map = SHARED.MAPS[mapKey];
-      if (!map) return;
-      const spawns = map.spawns.slice();
-      for (let j = spawns.length - 1; j > 0; j--) {
-        const k = Math.floor(Math.random() * (j + 1));
-        [spawns[j], spawns[k]] = [spawns[k], spawns[j]];
+      bullets = [];
+      particles = [];
+      for (let i = 0; i < 4; i++) {
+        bots.push(spawnBot(i));
       }
-      const NUM_BOTS = 4;
-      for (let i = 0; i < NUM_BOTS; i++) {
-        const sp = spawns[i % spawns.length];
-        bots.push({
-          id: "bot_" + i,
-          x: sp.x, y: sp.y,
-          vx: 0, vy: 0,
-          facing: Math.random() > 0.5 ? 1 : -1,
-          color: COLORS[i % COLORS.length],
-          name: NAMES[i % NAMES.length],
-          alive: true,
-          hp: 100,
-          jumpsLeft: 2,
-          onGround: false,
-          weapon: "pistol",
-          ammo: -1,
-          knockbackVx: 0, knockbackVy: 0,
-          aimX: Math.random() > 0.5 ? 1 : -1,
-          aimY: 0,
-          // AI casovace
-          moveTimer: 0,
-          moveDir: 0,
-          jumpCooldown: 0,
-          shootCooldown: 0,
-          lastShotAt: 0,
-          // pickup
-          ammoCount: 0,
-        });
-      }
+      initialized = true;
     }
 
     let lastTime = performance.now();
+    let mapChangeTimer = 30;
 
     function tick(now) {
       requestAnimationFrame(tick);
@@ -112,11 +104,9 @@
 
       const menuActive = document.getElementById("menu")?.classList.contains("active");
       if (!menuActive) return;
-
-      // Pokud SHARED jeste neni, pockame
       if (!SHARED || !SHARED.MAPS) return;
-      if (!started) startSimulation();
-      if (!started) return;
+
+      if (!initialized) initBots();
 
       const map = SHARED.MAPS[mapKey];
       if (!map) return;
@@ -125,125 +115,141 @@
       mapChangeTimer -= dt;
       if (mapChangeTimer <= 0) {
         const keys = Object.keys(SHARED.MAPS);
-        const next = keys[Math.floor(Math.random() * keys.length)];
-        if (next !== mapKey) {
-          mapKey = next;
-          respawnAllBots();
-          bullets = [];
-          trailerParticles.length = 0;
-        }
+        mapKey = keys[Math.floor(Math.random() * keys.length)];
+        initBots();
         mapChangeTimer = 25 + Math.random() * 15;
       }
 
-      // === UPDATE BOTU ===
       const PL = SHARED.PLAYER;
       const aliveBots = bots.filter(b => b.alive);
 
+      // === UPDATE BOTU ===
       for (const b of bots) {
+        // Mrtvy - pockej na respawn
         if (!b.alive) {
-          // Mrtvy - respawnni za chvili
-          b.respawnAt = (b.respawnAt || (now + 2000));
           if (now >= b.respawnAt) {
-            const spawns = map.spawns;
-            const sp = spawns[Math.floor(Math.random() * spawns.length)];
-            b.x = sp.x; b.y = sp.y;
-            b.vx = 0; b.vy = 0;
-            b.knockbackVx = 0; b.knockbackVy = 0;
+            const sp = map.spawns[Math.floor(Math.random() * map.spawns.length)];
+            b.x = sp.x;
+            b.y = sp.y;
+            b.vx = 0;
+            b.vy = 0;
             b.alive = true;
             b.hp = 100;
             b.weapon = "pistol";
-            b.ammo = -1;
-            b.respawnAt = 0;
+            b.facing = Math.random() > 0.5 ? 1 : -1;
+            b.aimX = b.facing;
+            b.aimY = 0;
           }
           continue;
         }
 
-        // === AI ===
+        // === AI - pohyb ===
         b.moveTimer -= dt;
         if (b.moveTimer <= 0) {
-          b.moveDir = Math.random() < 0.3 ? 0 : (Math.random() < 0.5 ? -1 : 1);
-          b.moveTimer = 0.4 + Math.random() * 1.2;
-        }
-        b.jumpCooldown -= dt;
-        if (b.jumpCooldown <= 0 && b.onGround && Math.random() < 0.3) {
-          b.vy = -PL.JUMP_VELOCITY;
-          b.jumpsLeft = PL.MAX_JUMPS - 1;
-          b.onGround = false;
-          b.jumpCooldown = 1.0 + Math.random() * 1.5;
-        }
-        // Double jump nahodne ve vzduchu
-        if (!b.onGround && b.jumpsLeft > 0 && Math.random() < 0.005) {
-          b.vy = -PL.DOUBLE_JUMP_VELOCITY;
-          b.jumpsLeft--;
+          // 60% sance jit nahodnym smerem, 40% stat
+          const r = Math.random();
+          if (r < 0.3) b.moveDir = -1;
+          else if (r < 0.6) b.moveDir = 1;
+          else b.moveDir = 0;
+          b.moveTimer = 0.6 + Math.random() * 1.5;
         }
 
-        // Najdi target a strilej
-        b.shootCooldown -= dt;
-        if (b.shootCooldown <= 0 && aliveBots.length > 1) {
-          // Cilem nejblizsi
-          let target = null, minD = Infinity;
+        // === Skok ===
+        b.jumpTimer -= dt;
+        if (b.jumpTimer <= 0 && b.onGround && Math.random() < 0.4) {
+          b.vy = -550;
+          b.onGround = false;
+          b.jumpTimer = 1.5 + Math.random() * 2;
+        }
+
+        // === AI - mireni a strelba ===
+        b.shootTimer -= dt;
+        if (b.shootTimer <= 0 && aliveBots.length > 1) {
+          // Najdi nejblizsi cil
+          let target = null;
+          let minD = Infinity;
           for (const o of aliveBots) {
             if (o === b) continue;
             const d = Math.hypot(o.x - b.x, o.y - b.y);
-            if (d < minD) { minD = d; target = o; }
+            if (d < minD) {
+              minD = d;
+              target = o;
+            }
           }
           if (target) {
-            const dx = target.x - b.x;
-            const dy = target.y - b.y;
+            const dx = (target.x + 24) - (b.x + 24);
+            const dy = (target.y + 32) - (b.y + 32);
             const m = Math.hypot(dx, dy) || 1;
             b.aimX = dx / m;
             b.aimY = dy / m;
             b.facing = b.aimX >= 0 ? 1 : -1;
 
-            const wepDef = SHARED.WEAPONS[b.weapon];
-            if (wepDef && (b.ammo === -1 || b.ammo > 0)) {
-              fireWeaponAI(b);
-              if (b.ammo !== -1) {
-                b.ammo--;
-                if (b.ammo <= 0) {
-                  b.weapon = "pistol";
-                  b.ammo = -1;
-                }
-              }
-              b.shootCooldown = wepDef.fireRate * (1.5 + Math.random());
+            // Vystrel
+            bullets.push({
+              x: b.x + 24 + b.aimX * 30,
+              y: b.y + 32 + b.aimY * 30,
+              vx: b.aimX * 800,
+              vy: b.aimY * 800,
+              life: 1.5,
+              owner: b,
+              color: "#ffe066",
+              radius: 4,
+              damage: 15,
+            });
+          }
+          b.shootTimer = 0.5 + Math.random() * 0.7;
+        }
+
+        // === Pohyb ===
+        const moveSpeed = 280;
+        if (b.moveDir !== 0) {
+          b.vx = b.moveDir * moveSpeed;
+        } else {
+          b.vx *= 0.85;
+        }
+
+        // Gravitace
+        b.vy += 1400 * dt;
+        if (b.vy > 800) b.vy = 800;
+
+        // Aplikace pohybu
+        b.x += b.vx * dt;
+        b.y += b.vy * dt;
+
+        // Kolize s platformami (jednoduche)
+        b.onGround = false;
+        const W = 48, H = 64;
+        for (const plat of map.platforms) {
+          // Y kolize - pristani z hora
+          if (b.x + W > plat.x && b.x < plat.x + plat.w) {
+            // Bot byl nad platformou a ted spada do ni
+            const prevY = b.y - b.vy * dt;
+            if (b.vy > 0 && prevY + H <= plat.y + 5 && b.y + H > plat.y && b.y < plat.y + plat.h) {
+              b.y = plat.y - H;
+              b.vy = 0;
+              b.onGround = true;
             }
           }
         }
 
-        // Knockback decay
-        const damp = Math.exp(-PL.KNOCKBACK_DAMP * dt);
-        b.knockbackVx *= damp;
-        b.knockbackVy *= damp;
+        // Hranice mapy X
+        if (b.x < 0) { b.x = 0; b.moveDir = 1; }
+        if (b.x > SHARED.WORLD_WIDTH - W) { b.x = SHARED.WORLD_WIDTH - W; b.moveDir = -1; }
 
-        // Pohyb
-        const targetVx = b.moveDir === -1 ? -PL.MOVE_SPEED : (b.moveDir === 1 ? PL.MOVE_SPEED : 0);
-        const accel = b.onGround ? PL.ACCEL_GROUND : PL.ACCEL_AIR;
-        if (targetVx !== 0) {
-          const diff = targetVx - b.vx;
-          const step = Math.sign(diff) * accel * dt;
-          if (Math.abs(step) > Math.abs(diff)) b.vx = targetVx;
-          else b.vx += step;
-        } else if (b.onGround) {
-          const fric = PL.FRICTION_GROUND * dt;
-          if (b.vx > fric) b.vx -= fric;
-          else if (b.vx < -fric) b.vx += fric;
-          else b.vx = 0;
-        }
-
-        // Gravitace
-        b.vy += SHARED.GRAVITY * dt;
-        if (b.vy > SHARED.MAX_FALL_SPEED) b.vy = SHARED.MAX_FALL_SPEED;
-
-        // Aplikuj pohyb s kolizemi
-        const totalVx = b.vx + b.knockbackVx;
-        const totalVy = b.vy + b.knockbackVy;
-        moveAndCollideBot(b, totalVx * dt, totalVy * dt, map);
-
-        if (b.onGround) b.jumpsLeft = PL.MAX_JUMPS;
-
-        // Pad mimo mapu = smrt!
-        if (b.y > PL.DEATH_Y) {
-          killBot(b);
+        // Pad mimo mapu = smrt
+        if (b.y > SHARED.WORLD_HEIGHT + 100) {
+          b.alive = false;
+          b.respawnAt = now + 1500 + Math.random() * 1000;
+          for (let k = 0; k < 15; k++) {
+            particles.push({
+              x: b.x + W/2,
+              y: SHARED.WORLD_HEIGHT,
+              vx: (Math.random() - 0.5) * 400,
+              vy: -Math.random() * 400 - 100,
+              life: 0.8,
+              color: b.color,
+            });
+          }
         }
       }
 
@@ -255,6 +261,13 @@
         bl.x += bl.vx * dt;
         bl.y += bl.vy * dt;
 
+        // Mimo mapu
+        if (bl.x < -50 || bl.x > SHARED.WORLD_WIDTH + 50 ||
+            bl.y < -50 || bl.y > SHARED.WORLD_HEIGHT + 50) {
+          bullets.splice(i, 1);
+          continue;
+        }
+
         // Kolize s mapou
         let hitMap = false;
         for (const plat of map.platforms) {
@@ -262,47 +275,52 @@
               bl.y > plat.y && bl.y < plat.y + plat.h) {
             hitMap = true;
             for (let k = 0; k < 4; k++) {
-              trailerParticles.push({
+              particles.push({
                 x: bl.x, y: bl.y,
                 vx: (Math.random() - 0.5) * 200,
-                vy: (Math.random() - 0.5) * 200 - 50,
+                vy: (Math.random() - 0.5) * 200,
                 life: 0.4,
                 color: bl.color,
-                size: 2,
               });
             }
             break;
           }
         }
         if (hitMap) { bullets.splice(i, 1); continue; }
-        if (bl.x < -100 || bl.x > SHARED.WORLD_WIDTH + 100 ||
-            bl.y < -100 || bl.y > SHARED.WORLD_HEIGHT + 100) {
-          bullets.splice(i, 1);
-          continue;
-        }
 
         // Kolize s boty
+        const W = 48, H = 64;
         for (const b of bots) {
           if (b === bl.owner || !b.alive) continue;
-          if (bl.x > b.x && bl.x < b.x + PL.WIDTH &&
-              bl.y > b.y && bl.y < b.y + PL.HEIGHT) {
-            // Hit
+          if (bl.x > b.x && bl.x < b.x + W && bl.y > b.y && bl.y < b.y + H) {
+            // Hit!
             b.hp -= bl.damage;
+            // Knockback
             const m = Math.hypot(bl.vx, bl.vy) || 1;
-            b.knockbackVx += (bl.vx / m) * bl.knockback;
-            b.knockbackVy += (bl.vy / m) * bl.knockback - 60;
-            // particles
-            for (let k = 0; k < 6; k++) {
-              trailerParticles.push({
+            b.vx += (bl.vx / m) * 350;
+            b.vy += (bl.vy / m) * 200 - 150;
+            for (let k = 0; k < 8; k++) {
+              particles.push({
                 x: bl.x, y: bl.y,
                 vx: (Math.random() - 0.5) * 300,
                 vy: (Math.random() - 0.5) * 300,
                 life: 0.5,
                 color: b.color,
-                size: 3,
               });
             }
-            if (b.hp <= 0) killBot(b);
+            if (b.hp <= 0) {
+              b.alive = false;
+              b.respawnAt = now + 1800 + Math.random() * 1200;
+              for (let k = 0; k < 20; k++) {
+                particles.push({
+                  x: b.x + W/2, y: b.y + H/2,
+                  vx: (Math.random() - 0.5) * 500,
+                  vy: (Math.random() - 0.5) * 500,
+                  life: 0.8,
+                  color: b.color,
+                });
+              }
+            }
             bullets.splice(i, 1);
             break;
           }
@@ -310,11 +328,11 @@
       }
 
       // === PARTICLES ===
-      for (let i = trailerParticles.length - 1; i >= 0; i--) {
-        const p = trailerParticles[i];
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
         p.life -= dt;
-        if (p.life <= 0) { trailerParticles.splice(i, 1); continue; }
-        p.vy += 400 * dt; // gravitace
+        if (p.life <= 0) { particles.splice(i, 1); continue; }
+        p.vy += 600 * dt;
         p.x += p.vx * dt;
         p.y += p.vy * dt;
       }
@@ -338,7 +356,7 @@
       ctx.translate(offsetX, offsetY);
       ctx.scale(scale, scale);
 
-      // Background pruhy (jako ve hre)
+      // Background pruhy
       ctx.fillStyle = map.bgAccent || "#2a3a5a";
       ctx.globalAlpha = 0.2;
       for (let i = 0; i < 8; i++) {
@@ -354,23 +372,15 @@
           ctx.fillStyle = "#3a4a6a";
         }
         ctx.fillRect(plat.x, plat.y, plat.w, plat.h);
-        // Top highlight
         ctx.fillStyle = "rgba(255,255,255,0.1)";
         ctx.fillRect(plat.x, plat.y, plat.w, 3);
       }
 
-      // Death zone (pod mapou)
-      const dz = ctx.createLinearGradient(0, PL.DEATH_Y - 100, 0, wh + 100);
-      dz.addColorStop(0, "rgba(255, 60, 60, 0)");
-      dz.addColorStop(1, "rgba(255, 60, 60, 0.4)");
-      ctx.fillStyle = dz;
-      ctx.fillRect(0, PL.DEATH_Y - 100, ww, wh + 200);
-
       // Particles
-      for (const p of trailerParticles) {
+      for (const p of particles) {
         ctx.fillStyle = p.color;
         ctx.globalAlpha = Math.min(1, p.life * 2);
-        ctx.fillRect(p.x - p.size/2, p.y - p.size/2, p.size, p.size);
+        ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
         ctx.globalAlpha = 1;
       }
 
@@ -379,202 +389,57 @@
         ctx.fillStyle = bl.color;
         ctx.shadowColor = bl.color;
         ctx.shadowBlur = 8;
-        if (bl.isLaser) {
-          // Cara
-          ctx.strokeStyle = bl.color;
-          ctx.lineWidth = 3;
-          ctx.beginPath();
-          ctx.moveTo(bl.x, bl.y);
-          ctx.lineTo(bl.x - bl.vx * 0.05, bl.y - bl.vy * 0.05);
-          ctx.stroke();
-        } else if (bl.isRocket) {
-          ctx.fillRect(bl.x - 6, bl.y - 4, 12, 8);
-        } else {
-          ctx.beginPath();
-          ctx.arc(bl.x, bl.y, bl.radius || 4, 0, Math.PI * 2);
-          ctx.fill();
-        }
+        ctx.beginPath();
+        ctx.arc(bl.x, bl.y, bl.radius || 4, 0, Math.PI * 2);
+        ctx.fill();
         ctx.shadowBlur = 0;
       }
 
-      // Boti (kreslime stejne jak ve hre)
+      // Boti
+      const W = 48, H = 64;
       for (const b of bots) {
         if (!b.alive) continue;
-        drawBotLikePlayer(b);
-      }
 
-      ctx.restore();
-    }
-
-    // Pomocne funkce - presny render postavy jak ve hre
-    function drawBotLikePlayer(p) {
-      const W = SHARED.PLAYER.WIDTH;
-      const H = SHARED.PLAYER.HEIGHT;
-      // Telo
-      ctx.fillStyle = p.color;
-      ctx.fillRect(p.x, p.y, W, H);
-      // Tmavsi okraj
-      ctx.fillStyle = "rgba(0,0,0,0.2)";
-      ctx.fillRect(p.x, p.y + H - 4, W, 4);
-      // Oci
-      const eyeY = p.y + H * 0.25;
-      const eyeX = p.x + (p.facing === 1 ? W * 0.55 : W * 0.2);
-      ctx.fillStyle = "#fff";
-      ctx.fillRect(eyeX, eyeY, 5, 5);
-      ctx.fillStyle = "#000";
-      ctx.fillRect(eyeX + (p.facing === 1 ? 2 : 0), eyeY + 1, 2, 3);
-      // Jmeno nad postavou
-      ctx.save();
-      ctx.font = "bold 13px Segoe UI, sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillStyle = "rgba(0,0,0,0.7)";
-      ctx.fillRect(p.x + W/2 - 35, p.y - 22, 70, 16);
-      ctx.fillStyle = p.color;
-      ctx.fillText(p.name, p.x + W/2, p.y - 10);
-      ctx.restore();
-      // HP bar nad jmenem
-      const hpRatio = Math.max(0, Math.min(1, p.hp / 100));
-      ctx.fillStyle = "rgba(0,0,0,0.7)";
-      ctx.fillRect(p.x, p.y - 5, W, 4);
-      ctx.fillStyle = hpRatio > 0.5 ? "#7dff7d" : (hpRatio > 0.25 ? "#ffd75e" : "#ff5e5e");
-      ctx.fillRect(p.x, p.y - 5, W * hpRatio, 4);
-      // Zbran
-      drawBotWeapon(p);
-    }
-
-    function drawBotWeapon(p) {
-      const W = SHARED.PLAYER.WIDTH;
-      const H = SHARED.PLAYER.HEIGHT;
-      const cx = p.x + W / 2;
-      const cy = p.y + H * 0.4;
-      const ang = Math.atan2(p.aimY, p.aimX);
-
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.rotate(ang);
-
-      if (p.weapon === "rocket") {
-        ctx.fillStyle = "#444";
-        ctx.fillRect(0, -7, 28, 14);
-        ctx.fillStyle = "#ef4444";
-        ctx.fillRect(24, -8, 6, 16);
-      } else if (p.weapon === "shotgun") {
-        ctx.fillStyle = "#5a4a3a";
-        ctx.fillRect(0, -5, 26, 10);
-        ctx.fillStyle = "#222";
-        ctx.fillRect(22, -6, 4, 12);
-      } else if (p.weapon === "laser") {
-        ctx.fillStyle = "#54e0ff";
-        ctx.fillRect(0, -3, 24, 6);
+        // Telo
+        ctx.fillStyle = b.color;
+        ctx.fillRect(b.x, b.y, W, H);
+        // Tmavsi spodek
+        ctx.fillStyle = "rgba(0,0,0,0.2)";
+        ctx.fillRect(b.x, b.y + H - 4, W, 4);
+        // Oci
+        const eyeY = b.y + H * 0.25;
+        const eyeX = b.x + (b.facing === 1 ? W * 0.55 : W * 0.2);
         ctx.fillStyle = "#fff";
-        ctx.fillRect(20, -2, 4, 4);
-      } else {
-        // pistol
+        ctx.fillRect(eyeX, eyeY, 5, 5);
+        ctx.fillStyle = "#000";
+        ctx.fillRect(eyeX + (b.facing === 1 ? 2 : 0), eyeY + 1, 2, 3);
+        // HP bar
+        const hpRatio = Math.max(0, Math.min(1, b.hp / 100));
+        ctx.fillStyle = "rgba(0,0,0,0.7)";
+        ctx.fillRect(b.x, b.y - 6, W, 4);
+        ctx.fillStyle = hpRatio > 0.5 ? "#7dff7d" : (hpRatio > 0.25 ? "#ffd75e" : "#ff5e5e");
+        ctx.fillRect(b.x, b.y - 6, W * hpRatio, 4);
+        // Jmeno
+        ctx.font = "bold 13px Segoe UI, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillStyle = "rgba(0,0,0,0.7)";
+        ctx.fillRect(b.x + W/2 - 25, b.y - 24, 50, 14);
+        ctx.fillStyle = b.color;
+        ctx.fillText(b.name, b.x + W/2, b.y - 13);
+        // Zbran (jednoducha cara)
+        const cx = b.x + W/2;
+        const cy = b.y + H * 0.4;
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(Math.atan2(b.aimY, b.aimX));
         ctx.fillStyle = "#333";
-        ctx.fillRect(0, -4, 18, 8);
+        ctx.fillRect(0, -4, 22, 8);
         ctx.fillStyle = "#222";
-        ctx.fillRect(15, -5, 4, 10);
+        ctx.fillRect(18, -5, 4, 10);
+        ctx.restore();
       }
 
       ctx.restore();
-    }
-
-    function moveAndCollideBot(b, dx, dy, map) {
-      const W = SHARED.PLAYER.WIDTH;
-      const H = SHARED.PLAYER.HEIGHT;
-      b.onGround = false;
-
-      // X
-      b.x += dx;
-      for (const plat of map.platforms) {
-        if (b.x < plat.x + plat.w && b.x + W > plat.x &&
-            b.y < plat.y + plat.h && b.y + H > plat.y) {
-          if (dx > 0) b.x = plat.x - W;
-          else if (dx < 0) b.x = plat.x + plat.w;
-          b.vx = 0;
-          b.knockbackVx *= 0.4;
-        }
-      }
-      // Y
-      b.y += dy;
-      for (const plat of map.platforms) {
-        if (b.x < plat.x + plat.w && b.x + W > plat.x &&
-            b.y < plat.y + plat.h && b.y + H > plat.y) {
-          if (dy > 0) {
-            b.y = plat.y - H;
-            b.onGround = true;
-            b.vy = 0;
-          } else if (dy < 0) {
-            b.y = plat.y + plat.h;
-            b.vy = 0;
-          }
-          b.knockbackVy *= 0.4;
-        }
-      }
-      // Hranice mapy X
-      if (b.x < -40) b.x = -40;
-      if (b.x > SHARED.WORLD_WIDTH - W + 40) b.x = SHARED.WORLD_WIDTH - W + 40;
-    }
-
-    function fireWeaponAI(b) {
-      const wepDef = SHARED.WEAPONS[b.weapon];
-      const W = SHARED.PLAYER.WIDTH;
-      const H = SHARED.PLAYER.HEIGHT;
-      const cx = b.x + W / 2;
-      const cy = b.y + H * 0.4;
-      const muzzleX = cx + b.aimX * 24;
-      const muzzleY = cy + b.aimY * 24;
-
-      const pellets = wepDef.pelletsPerShot || 1;
-      for (let i = 0; i < pellets; i++) {
-        const spread = wepDef.spread > 0 ? (Math.random() - 0.5) * 2 * wepDef.spread : 0;
-        const cs = Math.cos(spread);
-        const sn = Math.sin(spread);
-        const ax = b.aimX * cs - b.aimY * sn;
-        const ay = b.aimX * sn + b.aimY * cs;
-        const speed = wepDef.bulletSpeed * (1 + (Math.random() - 0.5) * 0.1);
-        bullets.push({
-          x: muzzleX, y: muzzleY,
-          vx: ax * speed,
-          vy: ay * speed,
-          life: wepDef.bulletLife,
-          owner: b,
-          color: wepDef.color || b.color,
-          radius: wepDef.bulletRadius || 4,
-          damage: wepDef.damage / pellets,
-          knockback: wepDef.knockback / pellets,
-          isLaser: wepDef.isLaser,
-          isRocket: wepDef.isRocket,
-        });
-      }
-
-      // Recoil
-      b.knockbackVx -= b.aimX * wepDef.recoil;
-      b.knockbackVy -= b.aimY * wepDef.recoil * 0.5;
-
-      // Po par strelach se obcas zmeni zbran (simulace pickupu)
-      if (b.weapon === "pistol" && Math.random() < 0.02) {
-        const newW = WEAPONS_LIST[1 + Math.floor(Math.random() * 3)];
-        b.weapon = newW;
-        b.ammo = SHARED.WEAPONS[newW].ammo;
-      }
-    }
-
-    function killBot(b) {
-      b.alive = false;
-      b.respawnAt = performance.now() + 1500 + Math.random() * 1000;
-      // Death particles
-      for (let k = 0; k < 20; k++) {
-        trailerParticles.push({
-          x: b.x + SHARED.PLAYER.WIDTH/2,
-          y: b.y + SHARED.PLAYER.HEIGHT/2,
-          vx: (Math.random() - 0.5) * 600,
-          vy: (Math.random() - 0.5) * 600 - 100,
-          life: 0.8 + Math.random() * 0.4,
-          color: b.color,
-          size: 4,
-        });
-      }
     }
 
     requestAnimationFrame(tick);
