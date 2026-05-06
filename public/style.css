@@ -2287,3 +2287,87 @@ body.has-touch .minimap {
   margin-left: 6px;
   font-weight: 700;
 }
+
+/* ======================= AUTH FORM - VYRAZNEJSI ======================= */
+
+/* Auth card má tmavší a více kontrastní pozadí */
+.auth-card {
+  background: rgba(8, 12, 22, 0.96) !important;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.7),
+              0 0 100px rgba(255, 138, 61, 0.08) !important;
+}
+
+/* Inputy v auth form - vetsi a zretelnejsi */
+.auth-form input[type="text"],
+.auth-form input[type="password"] {
+  width: 100%;
+  display: block;
+  padding: 14px 16px !important;
+  background: rgba(0, 0, 0, 0.5) !important;
+  border: 2px solid rgba(74, 144, 226, 0.3) !important;
+  border-radius: 10px !important;
+  color: #fff !important;
+  font-size: 16px !important;
+  font-family: inherit !important;
+  margin-bottom: 14px !important;
+  letter-spacing: 0.5px;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+  box-sizing: border-box;
+}
+.auth-form input[type="text"]::placeholder,
+.auth-form input[type="password"]::placeholder {
+  color: #4a5876 !important;
+  letter-spacing: 1px;
+}
+.auth-form input[type="text"]:focus,
+.auth-form input[type="password"]:focus {
+  outline: none !important;
+  border-color: #ff8a3d !important;
+  background: rgba(0, 0, 0, 0.7) !important;
+  box-shadow: 0 0 0 4px rgba(255, 138, 61, 0.15) !important;
+}
+
+/* Auth labely - vyraznejsi */
+.auth-form label {
+  display: block !important;
+  font-size: 11px !important;
+  letter-spacing: 2px !important;
+  color: #94a3c4 !important;
+  text-transform: uppercase !important;
+  margin-bottom: 6px !important;
+  margin-top: 4px !important;
+  font-weight: 700 !important;
+}
+
+/* Auth tabs lépe zvýrazněné */
+.auth-tabs {
+  background: rgba(0, 0, 0, 0.5) !important;
+  border: 1px solid rgba(74, 144, 226, 0.2);
+}
+
+/* Login tlačítko v auth - lépe oddělené */
+.auth-form .btn.primary.big {
+  margin-top: 20px !important;
+  padding: 16px 20px !important;
+}
+.auth-form .btn.primary.big .btn-label {
+  font-size: 18px !important;
+  letter-spacing: 3px !important;
+}
+
+
+/* Auth screen - tmavsi overlay aby byl form citelny */
+#auth {
+  background: linear-gradient(180deg, rgba(5, 8, 16, 0.4) 0%, rgba(5, 8, 16, 0.7) 100%);
+}
+#auth-bg {
+  opacity: 0.35 !important; /* pozadi jeste tlumene */
+}
+
+/* Logo v auth screenu mensi (aby form mel vic mista) */
+#auth .logo-text {
+  font-size: 56px;
+}
+#auth .menu-hero {
+  margin-bottom: 18px;
+}
