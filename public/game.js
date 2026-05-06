@@ -137,6 +137,7 @@
     const userInfoName = document.getElementById("user-info-name");
     const userInfoAdmin = document.getElementById("user-info-admin");
     const userInfoTester = document.getElementById("user-info-tester");
+    const friendsPanel = document.getElementById("friends-panel");
     if (currentUser) {
       userInfo.style.display = "flex";
       guestNameInput.style.display = "none";
@@ -145,9 +146,16 @@
       if (userInfoTester) {
         userInfoTester.style.display = (currentUser.isTester && !currentUser.isAdmin) ? "inline-block" : "none";
       }
+      // Zobraz friends panel a refresh
+      if (friendsPanel) {
+        friendsPanel.style.display = "flex";
+        refreshFriendsList();
+      }
     } else {
       userInfo.style.display = "none";
       guestNameInput.style.display = "block";
+      // Skry friends panel
+      if (friendsPanel) friendsPanel.style.display = "none";
     }
   }
 
@@ -196,6 +204,178 @@
     }
   }
   checkSession();
+
+  // ---------- FRIENDS PANEL ----------
+  let friendsRefreshInterval = null;
+
+  async function apiCall(endpoint, body) {
+    try {
+      const resp = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...body, token: sessionToken }),
+      });
+      return await resp.json();
+    } catch (err) {
+      return { ok: false, error: "Network error" };
+    }
+  }
+
+  async function refreshFriendsList() {
+    if (!currentUser || !sessionToken) return;
+    const data = await apiCall("/api/friends/list", {});
+    if (!data.ok) return;
+
+    // Friends list
+    const friendsListEl = document.getElementById("friends-list");
+    const friendsCountEl = document.getElementById("friends-count");
+    friendsCountEl.textContent = data.friends.length;
+    friendsListEl.innerHTML = "";
+    if (data.friends.length === 0) {
+      friendsListEl.innerHTML = '<div class="friends-empty">No friends yet</div>';
+    } else {
+      for (const f of data.friends) {
+        friendsListEl.appendChild(createFriendRow(f, "friend"));
+      }
+    }
+
+    // Incoming requests
+    const incomingSection = document.getElementById("friends-incoming-section");
+    const incomingEl = document.getElementById("friends-incoming");
+    const incomingCount = document.getElementById("friends-incoming-count");
+    if (data.incoming.length > 0) {
+      incomingSection.style.display = "block";
+      incomingCount.textContent = data.incoming.length;
+      incomingEl.innerHTML = "";
+      for (const f of data.incoming) {
+        incomingEl.appendChild(createFriendRow(f, "incoming"));
+      }
+    } else {
+      incomingSection.style.display = "none";
+    }
+
+    // Outgoing requests
+    const outgoingSection = document.getElementById("friends-outgoing-section");
+    const outgoingEl = document.getElementById("friends-outgoing");
+    const outgoingCount = document.getElementById("friends-outgoing-count");
+    if (data.outgoing.length > 0) {
+      outgoingSection.style.display = "block";
+      outgoingCount.textContent = data.outgoing.length;
+      outgoingEl.innerHTML = "";
+      for (const f of data.outgoing) {
+        outgoingEl.appendChild(createFriendRow(f, "outgoing"));
+      }
+    } else {
+      outgoingSection.style.display = "none";
+    }
+  }
+
+  function createFriendRow(user, type) {
+    const row = document.createElement("div");
+    row.className = "friend-row";
+    const dotClass = "friend-status-dot" + (user.isOnline ? " online" : "");
+    const nameClass = user.isAdmin ? " admin" : (user.isTester ? " tester" : "");
+    const namePrefix = user.isAdmin ? "👑 " : (user.isTester ? "🧪 " : "");
+
+    let actionsHtml = "";
+    if (type === "friend") {
+      actionsHtml = `<button class="friend-btn remove" data-action="remove" data-user="${escapeHtml(user.username)}">×</button>`;
+    } else if (type === "incoming") {
+      actionsHtml = `
+        <button class="friend-btn accept" data-action="accept" data-user="${escapeHtml(user.username)}">✓</button>
+        <button class="friend-btn decline" data-action="remove" data-user="${escapeHtml(user.username)}">×</button>
+      `;
+    } else if (type === "outgoing") {
+      actionsHtml = `<button class="friend-btn remove" data-action="remove" data-user="${escapeHtml(user.username)}">×</button>`;
+    }
+
+    row.innerHTML = `
+      <div class="${dotClass}"></div>
+      <div class="friend-name${nameClass}">${namePrefix}${escapeHtml(user.username)}</div>
+      <div class="friend-actions">${actionsHtml}</div>
+    `;
+
+    // Bind actions
+    row.querySelectorAll(".friend-btn").forEach((btn) => {
+      btn.onclick = async () => {
+        const action = btn.getAttribute("data-action");
+        const username = btn.getAttribute("data-user");
+        if (action === "accept") {
+          await apiCall("/api/friends/accept", { username });
+        } else if (action === "remove") {
+          await apiCall("/api/friends/remove", { username });
+        }
+        refreshFriendsList();
+      };
+    });
+
+    return row;
+  }
+
+  // Search input
+  const searchInput = document.getElementById("friends-search-input");
+  const searchResultsEl = document.getElementById("friends-search-results");
+  let searchTimer = null;
+
+  if (searchInput) {
+    searchInput.addEventListener("input", () => {
+      clearTimeout(searchTimer);
+      const query = searchInput.value.trim();
+      if (query.length < 2) {
+        searchResultsEl.innerHTML = "";
+        return;
+      }
+      searchTimer = setTimeout(async () => {
+        const data = await apiCall("/api/users/search", { query });
+        if (!data.ok) return;
+        searchResultsEl.innerHTML = "";
+        if (data.users.length === 0) {
+          searchResultsEl.innerHTML = '<div class="friends-empty">No users found</div>';
+          return;
+        }
+        for (const u of data.users) {
+          const row = document.createElement("div");
+          row.className = "friend-row";
+          const nameClass = u.isAdmin ? " admin" : (u.isTester ? " tester" : "");
+          const namePrefix = u.isAdmin ? "👑 " : (u.isTester ? "🧪 " : "");
+          row.innerHTML = `
+            <div class="friend-status-dot"></div>
+            <div class="friend-name${nameClass}">${namePrefix}${escapeHtml(u.username)}</div>
+            <div class="friend-actions">
+              <button class="friend-btn add" data-user="${escapeHtml(u.username)}">+ Add</button>
+            </div>
+          `;
+          row.querySelector("button").onclick = async () => {
+            const result = await apiCall("/api/friends/request", { username: u.username });
+            if (result.ok) {
+              row.querySelector(".friend-actions").innerHTML = '<span style="font-size:11px;color:#4ade80">Sent ✓</span>';
+              setTimeout(() => {
+                searchInput.value = "";
+                searchResultsEl.innerHTML = "";
+                refreshFriendsList();
+              }, 1000);
+            } else {
+              row.querySelector(".friend-actions").innerHTML = `<span style="font-size:11px;color:#ef4444">${result.error}</span>`;
+            }
+          };
+          searchResultsEl.appendChild(row);
+        }
+      }, 350);
+    });
+  }
+
+  // Refresh button
+  const friendsRefreshBtn = document.getElementById("btn-friends-refresh");
+  if (friendsRefreshBtn) {
+    friendsRefreshBtn.onclick = refreshFriendsList;
+  }
+
+  // Auto-refresh kazdych 15s kdyz je menu aktivni
+  setInterval(() => {
+    if (currentUser && document.getElementById("menu")?.classList.contains("active")) {
+      refreshFriendsList();
+    }
+  }, 15000);
 
   // Animovane pozadi v menu - mini simulace botu
   initMenuTrailer("menu-bg", "menu");

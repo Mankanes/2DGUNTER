@@ -957,7 +957,29 @@ const SESSION_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000; // 30 dni
 const MONGODB_URI = process.env.MONGODB_URI || null;
 let mongoClient = null;
 let mongoUsers = null; // collection
+let mongoFriends = null; // collection pro pratele
 let mongoEnabled = false;
+
+// Friends file fallback - jednoduchy JSON file
+const FRIENDS_FILE = path.join(__dirname, "..", "data", "friends.json");
+let friendsData = []; // [{ from, to, status, createdAt, acceptedAt }]
+
+function loadFriendsFile() {
+  try {
+    if (fs.existsSync(FRIENDS_FILE)) {
+      friendsData = JSON.parse(fs.readFileSync(FRIENDS_FILE, "utf8"));
+    }
+  } catch (err) {
+    friendsData = [];
+  }
+}
+function saveFriendsFile() {
+  try {
+    fs.writeFileSync(FRIENDS_FILE, JSON.stringify(friendsData, null, 2), "utf8");
+  } catch (err) {
+    console.error("[FRIENDS] Save error:", err.message);
+  }
+}
 
 async function initMongo() {
   if (!MONGODB_URI) {
@@ -967,13 +989,21 @@ async function initMongo() {
   try {
     const { MongoClient } = require("mongodb");
     mongoClient = new MongoClient(MONGODB_URI, {
-      serverSelectionTimeoutMS: 5000,
+      serverSelectionTimeoutMS: 10000,
+      // SSL/TLS nastaveni pro Render kompatibilitu
+      tls: true,
+      tlsAllowInvalidCertificates: false,
     });
     await mongoClient.connect();
     const db = mongoClient.db("knockfriend");
     mongoUsers = db.collection("users");
+    mongoFriends = db.collection("friends");
     // Vytvor unique index na username (pokud jeste neni)
     await mongoUsers.createIndex({ username: 1 }, { unique: true });
+    // Index pro friends - rychle dotazy na from/to
+    await mongoFriends.createIndex({ from: 1, to: 1 }, { unique: true });
+    await mongoFriends.createIndex({ to: 1, status: 1 });
+    await mongoFriends.createIndex({ from: 1, status: 1 });
     mongoEnabled = true;
     console.log("[DB] MongoDB pripojena uspesne");
   } catch (err) {
@@ -1201,6 +1231,7 @@ function promoteToTester(username, providedPassword) {
 (async () => {
   await initMongo();
   await loadUsers();
+  loadFriendsFile(); // file fallback pro pratele
 })();
 
 // Zpetna kompatibilita - admin token system jeste zustava pro chat /login prikaz
@@ -1249,6 +1280,275 @@ app.post("/api/me", (req, res) => {
     res.json({ ok: false });
   }
 });
+
+// ============================================================
+// FRIENDS API
+// ============================================================
+// Format friendship dokumentu v Mongo:
+// { from: "alice", to: "bob", status: "pending" | "accepted", createdAt: timestamp }
+// "pending" znamena ze "from" poslal request "to"
+// "accepted" znamena ze obema pratele
+// Pri accept se vlastne dokument prepise, takze je vzdy jen 1 dokument na par.
+
+// Helpper - vrati session nebo posle 401
+function requireAuth(req, res) {
+  const token = req.body?.token || req.query?.token;
+  const session = validateSession(token);
+  if (!session) {
+    res.status(401).json({ ok: false, error: "Not logged in" });
+    return null;
+  }
+  return session;
+}
+
+// Vyhledavani uzivatelu podle jmena (substring match, case-insensitive)
+app.post("/api/users/search", async (req, res) => {
+  const session = requireAuth(req, res);
+  if (!session) return;
+  const query = (req.body?.query || "").toString().trim();
+  if (query.length < 2) {
+    res.json({ ok: true, users: [] });
+    return;
+  }
+  const lcQuery = query.toLowerCase();
+
+  // Pri Mongo se zeptame primo DB (efektivnejsi)
+  if (mongoEnabled && mongoUsers) {
+    try {
+      const escaped = lcQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const docs = await mongoUsers.find({
+        username: { $regex: escaped, $options: "i" },
+      }).limit(20).toArray();
+      const results = docs
+        .filter((u) => u.username !== session.username)
+        .map((u) => ({
+          username: u.username,
+          isAdmin: !!u.isAdmin,
+          isTester: !!u.isTester,
+        }));
+      res.json({ ok: true, users: results });
+      return;
+    } catch (err) {
+      console.error("[FRIENDS] Search error:", err.message);
+    }
+  }
+
+  // Fallback - filter z in-memory users objektu
+  const results = [];
+  for (const [username, user] of Object.entries(users)) {
+    if (username.toLowerCase().includes(lcQuery) && username !== session.username) {
+      results.push({
+        username,
+        isAdmin: !!user.isAdmin,
+        isTester: !!user.isTester,
+      });
+      if (results.length >= 20) break;
+    }
+  }
+  res.json({ ok: true, users: results });
+});
+
+// Posli friend request
+app.post("/api/friends/request", async (req, res) => {
+  const session = requireAuth(req, res);
+  if (!session) return;
+  const targetUsername = (req.body?.username || "").toString().trim();
+  if (!targetUsername || targetUsername === session.username) {
+    res.json({ ok: false, error: "Invalid target" });
+    return;
+  }
+  if (!users[targetUsername]) {
+    res.json({ ok: false, error: "User not found" });
+    return;
+  }
+
+  if (mongoEnabled && mongoFriends) {
+    try {
+      // Zkontroluj zda uz neexistuje
+      const existing = await mongoFriends.findOne({
+        $or: [
+          { from: session.username, to: targetUsername },
+          { from: targetUsername, to: session.username },
+        ],
+      });
+      if (existing) {
+        if (existing.status === "accepted") {
+          res.json({ ok: false, error: "Already friends" });
+        } else if (existing.from === session.username) {
+          res.json({ ok: false, error: "Request already sent" });
+        } else {
+          // Druhy poslal request prvni - misto duplikatu rovnou accept
+          await mongoFriends.updateOne(
+            { from: targetUsername, to: session.username },
+            { $set: { status: "accepted", acceptedAt: Date.now() } }
+          );
+          res.json({ ok: true, autoAccepted: true });
+        }
+        return;
+      }
+      await mongoFriends.insertOne({
+        from: session.username,
+        to: targetUsername,
+        status: "pending",
+        createdAt: Date.now(),
+      });
+      res.json({ ok: true });
+    } catch (err) {
+      console.error("[FRIENDS] Request error:", err.message);
+      res.json({ ok: false, error: "Server error" });
+    }
+  } else {
+    // File fallback
+    const existing = friendsData.find((f) =>
+      (f.from === session.username && f.to === targetUsername) ||
+      (f.from === targetUsername && f.to === session.username)
+    );
+    if (existing) {
+      if (existing.status === "accepted") {
+        res.json({ ok: false, error: "Already friends" });
+      } else if (existing.from === session.username) {
+        res.json({ ok: false, error: "Request already sent" });
+      } else {
+        existing.status = "accepted";
+        existing.acceptedAt = Date.now();
+        saveFriendsFile();
+        res.json({ ok: true, autoAccepted: true });
+      }
+      return;
+    }
+    friendsData.push({
+      from: session.username,
+      to: targetUsername,
+      status: "pending",
+      createdAt: Date.now(),
+    });
+    saveFriendsFile();
+    res.json({ ok: true });
+  }
+});
+
+// Akceptuj friend request
+app.post("/api/friends/accept", async (req, res) => {
+  const session = requireAuth(req, res);
+  if (!session) return;
+  const fromUsername = (req.body?.username || "").toString().trim();
+  if (!fromUsername) {
+    res.json({ ok: false, error: "Invalid" });
+    return;
+  }
+  if (mongoEnabled && mongoFriends) {
+    try {
+      const result = await mongoFriends.updateOne(
+        { from: fromUsername, to: session.username, status: "pending" },
+        { $set: { status: "accepted", acceptedAt: Date.now() } }
+      );
+      if (result.matchedCount === 0) {
+        res.json({ ok: false, error: "Request not found" });
+      } else {
+        res.json({ ok: true });
+      }
+    } catch (err) {
+      res.json({ ok: false, error: "Server error" });
+    }
+  } else {
+    const f = friendsData.find((x) => x.from === fromUsername && x.to === session.username && x.status === "pending");
+    if (!f) {
+      res.json({ ok: false, error: "Request not found" });
+    } else {
+      f.status = "accepted";
+      f.acceptedAt = Date.now();
+      saveFriendsFile();
+      res.json({ ok: true });
+    }
+  }
+});
+
+// Odmítni / smaž friend request nebo přátelství
+app.post("/api/friends/remove", async (req, res) => {
+  const session = requireAuth(req, res);
+  if (!session) return;
+  const otherUsername = (req.body?.username || "").toString().trim();
+  if (!otherUsername) {
+    res.json({ ok: false, error: "Invalid" });
+    return;
+  }
+  if (mongoEnabled && mongoFriends) {
+    try {
+      await mongoFriends.deleteOne({
+        $or: [
+          { from: session.username, to: otherUsername },
+          { from: otherUsername, to: session.username },
+        ],
+      });
+      res.json({ ok: true });
+    } catch (err) {
+      res.json({ ok: false, error: "Server error" });
+    }
+  } else {
+    friendsData = friendsData.filter((f) =>
+      !((f.from === session.username && f.to === otherUsername) ||
+        (f.from === otherUsername && f.to === session.username))
+    );
+    saveFriendsFile();
+    res.json({ ok: true });
+  }
+});
+
+// Get friend list - rozdeli na: friends, incoming requests, outgoing requests
+app.post("/api/friends/list", async (req, res) => {
+  const session = requireAuth(req, res);
+  if (!session) return;
+
+  let all = [];
+  if (mongoEnabled && mongoFriends) {
+    try {
+      all = await mongoFriends.find({
+        $or: [
+          { from: session.username },
+          { to: session.username },
+        ],
+      }).toArray();
+    } catch (err) {
+      console.error("[FRIENDS] List error:", err.message);
+      res.json({ ok: false, error: "Server error" });
+      return;
+    }
+  } else {
+    all = friendsData.filter((f) => f.from === session.username || f.to === session.username);
+  }
+
+  const friends = [];
+  const incoming = [];
+  const outgoing = [];
+
+  for (const f of all) {
+    const other = f.from === session.username ? f.to : f.from;
+    const otherUser = users[other];
+    const meta = {
+      username: other,
+      isOnline: isUserOnline(other),
+      isAdmin: !!(otherUser?.isAdmin),
+      isTester: !!(otherUser?.isTester),
+    };
+    if (f.status === "accepted") {
+      friends.push(meta);
+    } else if (f.status === "pending") {
+      if (f.to === session.username) incoming.push(meta);
+      else outgoing.push(meta);
+    }
+  }
+  // Online priatele nahoru
+  friends.sort((a, b) => (b.isOnline - a.isOnline) || a.username.localeCompare(b.username));
+  res.json({ ok: true, friends, incoming, outgoing });
+});
+
+// Helper - zkontroluj jestli je uzivatel online (v nejakem socketu prihlasen)
+function isUserOnline(username) {
+  for (const [id, sock] of io.sockets.sockets) {
+    if (sock.data?.username === username) return true;
+  }
+  return false;
+}
 
 app.get("/api/rooms", (_req, res) => {
   const list = [];

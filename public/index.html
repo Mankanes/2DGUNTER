@@ -133,6 +133,44 @@
         <span class="kb-group"><span class="kb-label">Chat</span> <kbd>Z</kbd></span>
         <span class="kb-group"><span class="kb-label">Console</span> <kbd>~</kbd></span>
       </div>
+
+      <!-- Friends panel - vpravo, jen pro prihlasene -->
+      <div id="friends-panel" class="friends-panel" style="display:none">
+        <div class="friends-header">
+          <h3>Friends</h3>
+          <button id="btn-friends-refresh" class="btn-small" title="Refresh">↻</button>
+        </div>
+
+        <!-- Vyhledavani -->
+        <div class="friends-search">
+          <input id="friends-search-input" type="text" placeholder="Search players..." maxlength="16" />
+          <div id="friends-search-results" class="friends-search-results"></div>
+        </div>
+
+        <!-- Incoming requests -->
+        <div id="friends-incoming-section" class="friends-section" style="display:none">
+          <div class="friends-section-title">
+            Friend requests (<span id="friends-incoming-count">0</span>)
+          </div>
+          <div id="friends-incoming" class="friends-list"></div>
+        </div>
+
+        <!-- Friends list -->
+        <div class="friends-section">
+          <div class="friends-section-title">
+            Friends (<span id="friends-count">0</span>)
+          </div>
+          <div id="friends-list" class="friends-list"></div>
+        </div>
+
+        <!-- Outgoing requests -->
+        <div id="friends-outgoing-section" class="friends-section" style="display:none">
+          <div class="friends-section-title">
+            Pending (<span id="friends-outgoing-count">0</span>)
+          </div>
+          <div id="friends-outgoing" class="friends-list"></div>
+        </div>
+      </div>
     </div>
 
     <!-- Settings tlacitko - vzdy viditelne v rohu -->
