@@ -941,7 +941,7 @@ const fs = require("fs");
 const crypto = require("crypto");
 const USERS_FILE = path.join(__dirname, "..", "data", "users.json");
 
-// Zajisti ze data slozka existuje
+// Zajisti ze data slozka existuje (pro file fallback)
 const dataDir = path.dirname(USERS_FILE);
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
@@ -953,24 +953,105 @@ let users = {};
 const sessions = new Map();
 const SESSION_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000; // 30 dni
 
-function loadUsers() {
+// MongoDB setup - pouzije se pokud je MONGODB_URI v env vars, jinak fallback na soubor
+const MONGODB_URI = process.env.MONGODB_URI || null;
+let mongoClient = null;
+let mongoUsers = null; // collection
+let mongoEnabled = false;
+
+async function initMongo() {
+  if (!MONGODB_URI) {
+    console.log("[DB] MONGODB_URI neni nastaveny - pouzije se file storage");
+    return;
+  }
+  try {
+    const { MongoClient } = require("mongodb");
+    mongoClient = new MongoClient(MONGODB_URI, {
+      serverSelectionTimeoutMS: 5000,
+    });
+    await mongoClient.connect();
+    const db = mongoClient.db("knockfriend");
+    mongoUsers = db.collection("users");
+    // Vytvor unique index na username (pokud jeste neni)
+    await mongoUsers.createIndex({ username: 1 }, { unique: true });
+    mongoEnabled = true;
+    console.log("[DB] MongoDB pripojena uspesne");
+  } catch (err) {
+    console.error("[DB] MongoDB chyba pripojeni:", err.message);
+    console.log("[DB] Pouzije se file storage jako fallback");
+    mongoEnabled = false;
+  }
+}
+
+async function loadUsers() {
+  if (mongoEnabled && mongoUsers) {
+    try {
+      const all = await mongoUsers.find({}).toArray();
+      users = {};
+      for (const u of all) {
+        // Odstran _id (Mongo interni)
+        const { _id, ...userData } = u;
+        users[u.username] = userData;
+      }
+      console.log(`[DB] Loaded ${all.length} users from MongoDB`);
+      return;
+    } catch (err) {
+      console.error("[DB] MongoDB load error:", err.message);
+    }
+  }
+  // Fallback na soubor
   try {
     if (fs.existsSync(USERS_FILE)) {
       const raw = fs.readFileSync(USERS_FILE, "utf8");
       users = JSON.parse(raw);
-      console.log(`[USERS] Loaded ${Object.keys(users).length} users from disk`);
+      console.log(`[DB] Loaded ${Object.keys(users).length} users from file`);
     }
   } catch (err) {
-    console.error("[USERS] Failed to load:", err.message);
+    console.error("[DB] File load error:", err.message);
     users = {};
   }
 }
 
-function saveUsers() {
+async function saveUser(username) {
+  // Uloz jednoho uzivatele - efektivnejsi nez ukladat vse
+  if (mongoEnabled && mongoUsers) {
+    try {
+      const user = users[username];
+      if (!user) return;
+      await mongoUsers.replaceOne(
+        { username },
+        user,
+        { upsert: true }
+      );
+      return;
+    } catch (err) {
+      console.error("[DB] MongoDB save error:", err.message);
+    }
+  }
+  // Fallback na soubor (uloz vse)
+  saveAllUsersToFile();
+}
+
+function saveAllUsersToFile() {
   try {
     fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2), "utf8");
   } catch (err) {
-    console.error("[USERS] Failed to save:", err.message);
+    console.error("[DB] File save error:", err.message);
+  }
+}
+
+// Wrapper aby existujici kod (saveUsers()) furt fungoval
+function saveUsers() {
+  if (mongoEnabled) {
+    // Pri Mongo neukladame vse (pomale) - jen oznacime ze nekdo se zmenil
+    // Volajici by mel pouzit saveUser(username) pro konkretni update
+    // Ale aby kod fungoval i bez zmen, ulozime vse
+    for (const u of Object.keys(users)) {
+      mongoUsers.replaceOne({ username: u }, users[u], { upsert: true })
+        .catch(err => console.error("[DB] save error:", err.message));
+    }
+  } else {
+    saveAllUsersToFile();
   }
 }
 
@@ -1116,7 +1197,11 @@ function promoteToTester(username, providedPassword) {
   return true;
 }
 
-loadUsers();
+// Inicializace databaze a nacteni uzivatelu (asynchronne)
+(async () => {
+  await initMongo();
+  await loadUsers();
+})();
 
 // Zpetna kompatibilita - admin token system jeste zustava pro chat /login prikaz
 function generateAdminToken() {
