@@ -1898,6 +1898,7 @@ body.has-touch .minimap {
     rgba(74, 144, 226, 0.3),
     rgba(255, 138, 61, 0.3));
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
   pointer-events: none;
