@@ -2413,3 +2413,35 @@ body.has-touch .minimap {
   background: #ff8a3d;
   box-shadow: 0 0 8px rgba(255, 138, 61, 0.5);
 }
+
+/* ======================= TESTER BADGE ======================= */
+.tester-badge {
+  display: inline-block;
+  background: rgba(84, 224, 255, 0.2);
+  color: #54e0ff;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 9px;
+  letter-spacing: 1px;
+  margin: 0 4px;
+  font-weight: 700;
+  vertical-align: middle;
+}
+.user-info-tester {
+  display: inline-block;
+  background: rgba(84, 224, 255, 0.2);
+  color: #54e0ff;
+  font-size: 10px;
+  letter-spacing: 1px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: 6px;
+  font-weight: 700;
+}
+.chat-tester {
+  display: inline-block;
+  margin-right: 2px;
+}
+.lobby-player.tester .pname {
+  color: #54e0ff;
+}

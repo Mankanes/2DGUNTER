@@ -66,7 +66,7 @@
       if (data.ok) {
         sessionToken = data.token;
         localStorage.setItem("kf_session_token", data.token);
-        currentUser = { username: data.username, isAdmin: data.isAdmin };
+        currentUser = { username: data.username, isAdmin: data.isAdmin, isTester: data.isTester };
         onAuthSuccess();
       } else {
         showAuthError(data.error || "Login failed");
@@ -100,7 +100,7 @@
       if (data.ok) {
         sessionToken = data.token;
         localStorage.setItem("kf_session_token", data.token);
-        currentUser = { username: data.username, isAdmin: data.isAdmin };
+        currentUser = { username: data.username, isAdmin: data.isAdmin, isTester: data.isTester };
         onAuthSuccess();
       } else {
         showAuthError(data.error || "Registration failed");
@@ -136,11 +136,15 @@
     const guestNameInput = document.getElementById("guest-name-input");
     const userInfoName = document.getElementById("user-info-name");
     const userInfoAdmin = document.getElementById("user-info-admin");
+    const userInfoTester = document.getElementById("user-info-tester");
     if (currentUser) {
       userInfo.style.display = "flex";
       guestNameInput.style.display = "none";
       userInfoName.textContent = currentUser.username;
       userInfoAdmin.style.display = currentUser.isAdmin ? "inline-block" : "none";
+      if (userInfoTester) {
+        userInfoTester.style.display = (currentUser.isTester && !currentUser.isAdmin) ? "inline-block" : "none";
+      }
     } else {
       userInfo.style.display = "none";
       guestNameInput.style.display = "block";
@@ -179,7 +183,7 @@
       });
       const data = await resp.json();
       if (data.ok) {
-        currentUser = { username: data.username, isAdmin: data.isAdmin };
+        currentUser = { username: data.username, isAdmin: data.isAdmin, isTester: data.isTester };
         updateUserInfoUI();
         showScreen("menu");
       } else {
@@ -782,7 +786,7 @@
     }
     if (resp?.username) {
       // Server overil session token
-      currentUser = { username: resp.username, isAdmin: resp.isAdmin };
+      currentUser = { username: resp.username, isAdmin: resp.isAdmin, isTester: resp.isTester };
       updateUserInfoUI();
     }
     if (resp?.isAdmin) {
@@ -914,13 +918,14 @@
     lobbyPlayersEl.innerHTML = "";
     for (const p of info.players) {
       const row = document.createElement("div");
-      row.className = "lobby-player" + (p.ready ? " ready" : "") + (p.isAdmin ? " admin" : "");
+      row.className = "lobby-player" + (p.ready ? " ready" : "") + (p.isAdmin ? " admin" : "") + (p.isTester ? " tester" : "");
       const adminBadge = p.isAdmin ? '<span class="admin-badge">👑</span> ' : '';
+      const testerBadge = p.isTester && !p.isAdmin ? '<span class="tester-badge">🧪 TESTER</span> ' : '';
       const hostBadge = p.id === info.hostId ? '<span class="player-host-badge">HOST</span>' : '';
-      const nameStyle = p.isAdmin ? 'color: #ffd700' : '';
+      const nameStyle = p.isAdmin ? 'color: #ffd700' : (p.isTester ? 'color: #54e0ff' : '');
       row.innerHTML = `
         <div class="swatch" style="background:${p.color};color:${p.color}"></div>
-        <div class="pname" style="${nameStyle}">${adminBadge}${escapeHtml(p.name)}${p.id === selfId ? " (you)" : ""}${hostBadge}</div>
+        <div class="pname" style="${nameStyle}">${adminBadge}${testerBadge}${escapeHtml(p.name)}${p.id === selfId ? " (you)" : ""}${hostBadge}</div>
         <div class="pready">${p.ready ? "READY" : "..."}</div>
       `;
       lobbyPlayersEl.appendChild(row);
@@ -1420,8 +1425,8 @@
   });
 
   function appendChatMessage(msg) {
-    const adminBadge = msg.isAdmin ? '<span class="chat-admin">👑</span> ' : '';
-    const nameColor = msg.isAdmin ? "#ffd700" : msg.color;
+    const adminBadge = msg.isAdmin ? '<span class="chat-admin">👑</span> ' : (msg.isTester ? '<span class="chat-tester">🧪</span> ' : '');
+    const nameColor = msg.isAdmin ? "#ffd700" : (msg.isTester ? "#54e0ff" : msg.color);
 
     // Lobby log
     const lobbyRow = document.createElement("div");
@@ -2518,8 +2523,8 @@
     ctx.textAlign = "center";
     ctx.fillStyle = "rgba(0,0,0,0.7)";
     ctx.fillRect(p.x + W / 2 - 55, p.y - 22, 110, 16);
-    ctx.fillStyle = p.isAdmin ? "#ffd700" : p.color;
-    const namePrefix = p.isAdmin ? "👑 " : "";
+    ctx.fillStyle = p.isAdmin ? "#ffd700" : (p.isTester ? "#54e0ff" : p.color);
+    const namePrefix = p.isAdmin ? "👑 " : (p.isTester ? "🧪 " : "");
     ctx.fillText(namePrefix + p.name + (p.id === selfId ? " ★" : ""), p.x + W / 2, p.y - 10);
     ctx.restore();
 
@@ -2735,8 +2740,8 @@
     let html = `<div class="row header">
         <div></div><div>Player</div><div>W</div><div>K</div><div>D</div></div>`;
     for (const p of players) {
-      const adminBadge = p.isAdmin ? "👑 " : "";
-      const nameColor = p.isAdmin ? 'color:#ffd700' : '';
+      const adminBadge = p.isAdmin ? "👑 " : (p.isTester ? "🧪 " : "");
+      const nameColor = p.isAdmin ? 'color:#ffd700' : (p.isTester ? 'color:#54e0ff' : '');
       html += `<div class="row${p.alive ? "" : " dead"}">
         <div class="swatch" style="background:${p.color}"></div>
         <div class="pname" style="${nameColor}">${adminBadge}${escapeHtml(p.name)}${p.id === selfId ? " ★" : ""}</div>

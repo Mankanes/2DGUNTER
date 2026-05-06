@@ -219,6 +219,7 @@ class Game {
       ready: !!isBot, // boti jsou vzdy ready
       isBot,
       isAdmin: false,
+      isTester: false,
       ping: 0,
       botMove: false, // jestli se bot ma hybat
       shotCountWindow: [],
@@ -893,6 +894,7 @@ class Game {
         score: p.score, kills: p.kills, deaths: p.deaths,
         ready: p.ready,
         isAdmin: !!p.isAdmin,
+        isTester: !!p.isTester,
         ping: p.isBot ? 0 : (p.ping || 0),
       })),
       bullets: this.bullets.map((b) => ({
@@ -933,6 +935,7 @@ const io = new Server(server, {
 // Data se ukladaji do users.json (prezije sleep, smazane pri redeployi)
 // ============================================================
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "knockfriend2026";
+const TESTER_PASSWORD = process.env.TESTER_PASSWORD || "knocktester2026";
 
 const fs = require("fs");
 const crypto = require("crypto");
@@ -1020,6 +1023,7 @@ function registerUser(username, password) {
     passwordHash,
     salt,
     isAdmin: false,
+    isTester: false,
     createdAt: Date.now(),
     lastLoginAt: Date.now(),
   };
@@ -1029,7 +1033,7 @@ function registerUser(username, password) {
   const token = generateToken();
   sessions.set(token, { username, createdAt: Date.now(), lastUsedAt: Date.now() });
 
-  return { ok: true, token, username, isAdmin: false };
+  return { ok: true, token, username, isAdmin: false, isTester: false };
 }
 
 function loginUser(username, password) {
@@ -1058,7 +1062,7 @@ function loginUser(username, password) {
   const token = generateToken();
   sessions.set(token, { username: actualUsername, createdAt: Date.now(), lastUsedAt: Date.now() });
 
-  return { ok: true, token, username: actualUsername, isAdmin: !!user.isAdmin };
+  return { ok: true, token, username: actualUsername, isAdmin: !!user.isAdmin, isTester: !!user.isTester };
 }
 
 function validateSession(token) {
@@ -1075,7 +1079,7 @@ function validateSession(token) {
     sessions.delete(token);
     return null;
   }
-  return { username: data.username, isAdmin: !!user.isAdmin };
+  return { username: data.username, isAdmin: !!user.isAdmin, isTester: !!user.isTester };
 }
 
 function revokeSession(token) {
@@ -1098,6 +1102,16 @@ function promoteToAdmin(username, providedPassword) {
   const user = users[username];
   if (!user) return false;
   user.isAdmin = true;
+  saveUsers();
+  return true;
+}
+
+// Promote uzivatele na testera
+function promoteToTester(username, providedPassword) {
+  if (providedPassword !== TESTER_PASSWORD) return false;
+  const user = users[username];
+  if (!user) return false;
+  user.isTester = true;
   saveUsers();
   return true;
 }
@@ -1145,7 +1159,7 @@ app.post("/api/me", (req, res) => {
   const { token } = req.body || {};
   const session = validateSession(token);
   if (session) {
-    res.json({ ok: true, username: session.username, isAdmin: session.isAdmin });
+    res.json({ ok: true, username: session.username, isAdmin: session.isAdmin, isTester: session.isTester });
   } else {
     res.json({ ok: false });
   }
@@ -1224,6 +1238,7 @@ io.on("connection", (socket) => {
         socket.data.sessionToken = data.sessionToken;
         socket.data.username = session.username;
         socket.data.isAdmin = session.isAdmin;
+        socket.data.isTester = session.isTester;
       }
     }
 
@@ -1240,6 +1255,7 @@ io.on("connection", (socket) => {
         ok: true, id: socket.id,
         username: sessionUsername,
         isAdmin: !!socket.data.isAdmin,
+        isTester: !!socket.data.isTester,
         shared: serializeShared(),
         rooms: [...rooms.values()].map((r) => ({
           id: r.id, name: r.name,
@@ -1322,7 +1338,7 @@ io.on("connection", (socket) => {
     const cmd = (data?.cmd || "").toString().trim();
     if (!cmd) return;
 
-    // /login funguje VSEM, i mimo mistnost (admin status je per-socket)
+    // /login funguje VSEM, i mimo mistnost (admin/tester status je per-socket)
     if (cmd.startsWith("/login ") || cmd.startsWith("login ")) {
       const password = cmd.replace(/^\/?login\s+/, "").trim();
       if (password === ADMIN_PASSWORD) {
@@ -1347,6 +1363,31 @@ io.on("connection", (socket) => {
               name: "SYSTEM",
               color: "#ffd700",
               text: `👑 ${me.name} se stal adminem`,
+              time: Date.now(),
+            });
+            io.to(roomId).emit("room_info", roomInfo(room));
+          }
+        }
+      } else if (password === TESTER_PASSWORD) {
+        socket.data.isTester = true;
+        if (socket.data.username) {
+          promoteToTester(socket.data.username, password);
+          sendConsole(socket, "✓ Tester status ulozen do uctu " + socket.data.username, "ok");
+        } else {
+          sendConsole(socket, "✓ Tester status povolen (jen pro tuto session, prihlas se pro perzistenci)", "ok");
+        }
+        // Oznam v mistnosti
+        const roomId = socketRoom.get(socket.id);
+        const room = rooms.get(roomId);
+        if (room) {
+          const me = room.game.players.get(socket.id);
+          if (me) {
+            me.isTester = true;
+            io.to(roomId).emit("chat", {
+              id: "system",
+              name: "SYSTEM",
+              color: "#54e0ff",
+              text: `🧪 ${me.name} se stal testerem`,
               time: Date.now(),
             });
             io.to(roomId).emit("room_info", roomInfo(room));
@@ -1392,6 +1433,11 @@ io.on("connection", (socket) => {
     // Sync admin status z global do player objektu
     if (socket.data.isAdmin && !me.isAdmin) {
       me.isAdmin = true;
+      io.to(roomId).emit("room_info", roomInfo(room));
+    }
+    // Sync tester status
+    if (socket.data.isTester && !me.isTester) {
+      me.isTester = true;
       io.to(roomId).emit("room_info", roomInfo(room));
     }
 
@@ -1559,19 +1605,17 @@ io.on("connection", (socket) => {
       if (password === ADMIN_PASSWORD) {
         player.isAdmin = true;
         socket.data.isAdmin = true;
-        // Vytvor token a posli ho klientovi
-        const token = createAdminToken();
-        socket.data.adminToken = token;
-        socket.emit("admin_token", { token });
-        // Posli jen tomuto hraci potvrzeni (ostatni neuvidi)
+        // Pokud je prihlaseny ucet, ulozit
+        if (socket.data.username) {
+          promoteToAdmin(socket.data.username, password);
+        }
         socket.emit("chat", {
           id: "system",
           name: "SYSTEM",
           color: "#ffd700",
-          text: `✓ Admin status povolen pro ${player.name} (zapamatovano)`,
+          text: `✓ Admin status povolen pro ${player.name}`,
           time: now,
         });
-        // A vsem oznam ze je novy admin (bez hesla)
         io.to(roomId).emit("chat", {
           id: "system",
           name: "SYSTEM",
@@ -1579,7 +1623,27 @@ io.on("connection", (socket) => {
           text: `👑 ${player.name} se stal adminem`,
           time: now,
         });
-        // Aktualizuj room_info aby UI ukazovalo admin status
+        io.to(roomId).emit("room_info", roomInfo(room));
+      } else if (password === TESTER_PASSWORD) {
+        player.isTester = true;
+        socket.data.isTester = true;
+        if (socket.data.username) {
+          promoteToTester(socket.data.username, password);
+        }
+        socket.emit("chat", {
+          id: "system",
+          name: "SYSTEM",
+          color: "#54e0ff",
+          text: `✓ Tester status povolen pro ${player.name}`,
+          time: now,
+        });
+        io.to(roomId).emit("chat", {
+          id: "system",
+          name: "SYSTEM",
+          color: "#54e0ff",
+          text: `🧪 ${player.name} se stal testerem`,
+          time: now,
+        });
         io.to(roomId).emit("room_info", roomInfo(room));
       } else {
         socket.emit("chat", {
@@ -1616,6 +1680,7 @@ io.on("connection", (socket) => {
       color: player.color,
       text,
       isAdmin: player.isAdmin,
+      isTester: player.isTester,
       time: now,
     });
   });
@@ -1664,6 +1729,9 @@ function joinRoom(socket, roomId, name, ack) {
   // Pokud je socket prihlaseny jako admin, nastav i player.isAdmin
   if (socket.data && socket.data.isAdmin) {
     p.isAdmin = true;
+  }
+  if (socket.data && socket.data.isTester) {
+    p.isTester = true;
   }
   socket.join(roomId);
   socketRoom.set(socket.id, roomId);
@@ -1716,6 +1784,7 @@ function roomInfo(room) {
       id: p.id, name: p.name, color: p.color,
       ready: p.ready, score: p.score,
       isAdmin: !!p.isAdmin,
+      isTester: !!p.isTester,
     })),
   };
 }
