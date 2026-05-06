@@ -218,7 +218,7 @@
 
         // Kolize s platformami (jednoduche)
         b.onGround = false;
-        const W = 48, H = 64;
+        const W = SHARED.PLAYER.WIDTH, H = SHARED.PLAYER.HEIGHT;
         for (const plat of map.platforms) {
           // Y kolize - pristani z hora
           if (b.x + W > plat.x && b.x < plat.x + plat.w) {
@@ -289,7 +289,7 @@
         if (hitMap) { bullets.splice(i, 1); continue; }
 
         // Kolize s boty
-        const W = 48, H = 64;
+        const W = SHARED.PLAYER.WIDTH, H = SHARED.PLAYER.HEIGHT;
         for (const b of bots) {
           if (b === bl.owner || !b.alive) continue;
           if (bl.x > b.x && bl.x < b.x + W && bl.y > b.y && bl.y < b.y + H) {
@@ -395,48 +395,85 @@
         ctx.shadowBlur = 0;
       }
 
-      // Boti
-      const W = 48, H = 64;
+      // Boti - kresleni presne jako v hre (stejny render kod)
       for (const b of bots) {
         if (!b.alive) continue;
+        const W = SHARED.PLAYER.WIDTH;
+        const H = SHARED.PLAYER.HEIGHT;
 
-        // Telo
+        // Stin pod postavou
+        ctx.fillStyle = "rgba(0,0,0,0.4)";
+        ctx.beginPath();
+        ctx.ellipse(b.x + W / 2, b.y + H + 4, W * 0.5, 6, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Telo (zaoblene rohy)
         ctx.fillStyle = b.color;
-        ctx.fillRect(b.x, b.y, W, H);
-        // Tmavsi spodek
-        ctx.fillStyle = "rgba(0,0,0,0.2)";
-        ctx.fillRect(b.x, b.y + H - 4, W, 4);
-        // Oci
-        const eyeY = b.y + H * 0.25;
-        const eyeX = b.x + (b.facing === 1 ? W * 0.55 : W * 0.2);
+        roundRect(ctx, b.x, b.y, W, H, 8);
+        ctx.fill();
+
+        // Svetlejsi vrch (jako helma)
+        ctx.fillStyle = lighten(b.color, 0.18);
+        roundRect(ctx, b.x + 4, b.y + 4, W - 8, H * 0.45, 6);
+        ctx.fill();
+
+        // Dve oci s panenkami (jako ve hre)
+        const eyeY = b.y + 18;
+        const eyeBaseX = b.x + W / 2;
+        const eyeOffset = b.facing > 0 ? 4 : -4;
         ctx.fillStyle = "#fff";
-        ctx.fillRect(eyeX, eyeY, 5, 5);
+        ctx.beginPath(); ctx.arc(eyeBaseX - 6 + eyeOffset, eyeY, 4, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(eyeBaseX + 6 + eyeOffset, eyeY, 4, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = "#000";
-        ctx.fillRect(eyeX + (b.facing === 1 ? 2 : 0), eyeY + 1, 2, 3);
-        // HP bar
-        const hpRatio = Math.max(0, Math.min(1, b.hp / 100));
-        ctx.fillStyle = "rgba(0,0,0,0.7)";
-        ctx.fillRect(b.x, b.y - 6, W, 4);
-        ctx.fillStyle = hpRatio > 0.5 ? "#7dff7d" : (hpRatio > 0.25 ? "#ffd75e" : "#ff5e5e");
-        ctx.fillRect(b.x, b.y - 6, W * hpRatio, 4);
-        // Jmeno
-        ctx.font = "bold 13px Segoe UI, sans-serif";
-        ctx.textAlign = "center";
-        ctx.fillStyle = "rgba(0,0,0,0.7)";
-        ctx.fillRect(b.x + W/2 - 25, b.y - 24, 50, 14);
-        ctx.fillStyle = b.color;
-        ctx.fillText(b.name, b.x + W/2, b.y - 13);
-        // Zbran (jednoducha cara)
-        const cx = b.x + W/2;
+        ctx.beginPath(); ctx.arc(eyeBaseX - 6 + eyeOffset + (b.facing > 0 ? 1 : -1), eyeY, 2, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(eyeBaseX + 6 + eyeOffset + (b.facing > 0 ? 1 : -1), eyeY, 2, 0, Math.PI * 2); ctx.fill();
+
+        // Zbran
+        const cx = b.x + W / 2;
         const cy = b.y + H * 0.4;
+        const ang = Math.atan2(b.aimY, b.aimX);
         ctx.save();
         ctx.translate(cx, cy);
-        ctx.rotate(Math.atan2(b.aimY, b.aimX));
-        ctx.fillStyle = "#333";
-        ctx.fillRect(0, -4, 22, 8);
-        ctx.fillStyle = "#222";
-        ctx.fillRect(18, -5, 4, 10);
+        ctx.rotate(ang);
+        if (b.weapon === "rocket") {
+          ctx.fillStyle = "#444";
+          ctx.fillRect(0, -7, 28, 14);
+          ctx.fillStyle = "#ef4444";
+          ctx.fillRect(24, -8, 6, 16);
+        } else if (b.weapon === "shotgun") {
+          ctx.fillStyle = "#5a4a3a";
+          ctx.fillRect(0, -5, 26, 10);
+          ctx.fillStyle = "#222";
+          ctx.fillRect(20, -6, 8, 12);
+        } else if (b.weapon === "laser") {
+          ctx.fillStyle = "#1a3a4a";
+          ctx.fillRect(0, -5, 28, 10);
+          ctx.fillStyle = "#54e0ff";
+          ctx.fillRect(24, -3, 6, 6);
+        } else {
+          ctx.fillStyle = "#333";
+          ctx.fillRect(0, -4, 18, 8);
+          ctx.fillStyle = "#222";
+          ctx.fillRect(14, -5, 4, 10);
+        }
         ctx.restore();
+
+        // Jmeno nad postavou
+        ctx.save();
+        ctx.font = "bold 13px Segoe UI";
+        ctx.textAlign = "center";
+        ctx.fillStyle = "rgba(0,0,0,0.7)";
+        ctx.fillRect(b.x + W / 2 - 35, b.y - 22, 70, 16);
+        ctx.fillStyle = b.color;
+        ctx.fillText(b.name, b.x + W / 2, b.y - 10);
+        ctx.restore();
+
+        // HP bar nad jmenem
+        const hpRatio = Math.max(0, Math.min(1, b.hp / 100));
+        ctx.fillStyle = "rgba(0,0,0,0.7)";
+        ctx.fillRect(b.x - 4, b.y - 6, W + 8, 5);
+        ctx.fillStyle = hpRatio > 0.5 ? "#4ade80" : hpRatio > 0.25 ? "#facc15" : "#ef4444";
+        ctx.fillRect(b.x - 4, b.y - 6, (W + 8) * hpRatio, 5);
       }
 
       ctx.restore();
