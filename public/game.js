@@ -13,6 +13,7 @@
   const snapshots = [];
 
   const screens = {
+    auth: document.getElementById("auth"),
     menu: document.getElementById("menu"),
     lobby: document.getElementById("lobby"),
     game: document.getElementById("game"),
@@ -21,13 +22,183 @@
     for (const k in screens) screens[k].classList.toggle("active", k === name);
   }
 
-  // ---------- MENU ----------
+  // ---------- AUTH ----------
+  let currentUser = null; // { username, isAdmin } pokud je prihlaseny, jinak null
+  let sessionToken = localStorage.getItem("kf_session_token") || null;
+
+  const authError = document.getElementById("auth-error");
+  function showAuthError(msg) {
+    authError.textContent = msg;
+    authError.style.display = "block";
+  }
+  function hideAuthError() {
+    authError.style.display = "none";
+  }
+
+  // Auth tab switcher
+  document.querySelectorAll(".auth-tab").forEach((tab) => {
+    tab.onclick = () => {
+      document.querySelectorAll(".auth-tab").forEach((t) => t.classList.remove("active"));
+      tab.classList.add("active");
+      const which = tab.getAttribute("data-tab");
+      document.getElementById("login-form").style.display = which === "login" ? "block" : "none";
+      document.getElementById("register-form").style.display = which === "register" ? "block" : "none";
+      hideAuthError();
+    };
+  });
+
+  // Login submit
+  document.getElementById("btn-login").onclick = async () => {
+    hideAuthError();
+    const username = document.getElementById("login-username").value.trim();
+    const password = document.getElementById("login-password").value;
+    if (!username || !password) {
+      showAuthError("Enter username and password");
+      return;
+    }
+    try {
+      const resp = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+      const data = await resp.json();
+      if (data.ok) {
+        sessionToken = data.token;
+        localStorage.setItem("kf_session_token", data.token);
+        currentUser = { username: data.username, isAdmin: data.isAdmin };
+        onAuthSuccess();
+      } else {
+        showAuthError(data.error || "Login failed");
+      }
+    } catch (err) {
+      showAuthError("Connection error");
+    }
+  };
+
+  // Register submit
+  document.getElementById("btn-register").onclick = async () => {
+    hideAuthError();
+    const username = document.getElementById("register-username").value.trim();
+    const password = document.getElementById("register-password").value;
+    const password2 = document.getElementById("register-password2").value;
+    if (!username || !password) {
+      showAuthError("Enter username and password");
+      return;
+    }
+    if (password !== password2) {
+      showAuthError("Passwords don't match");
+      return;
+    }
+    try {
+      const resp = await fetch("/api/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+      const data = await resp.json();
+      if (data.ok) {
+        sessionToken = data.token;
+        localStorage.setItem("kf_session_token", data.token);
+        currentUser = { username: data.username, isAdmin: data.isAdmin };
+        onAuthSuccess();
+      } else {
+        showAuthError(data.error || "Registration failed");
+      }
+    } catch (err) {
+      showAuthError("Connection error");
+    }
+  };
+
+  // Continue as Guest
+  document.getElementById("btn-guest").onclick = () => {
+    currentUser = null;
+    sessionToken = null;
+    localStorage.removeItem("kf_session_token");
+    onAuthSuccess(); // i guest jde do menu, ale s name inputem
+  };
+
+  // Login na enter
+  document.getElementById("login-password").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") document.getElementById("btn-login").click();
+  });
+  document.getElementById("register-password2").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") document.getElementById("btn-register").click();
+  });
+
+  function onAuthSuccess() {
+    updateUserInfoUI();
+    showScreen("menu");
+  }
+
+  function updateUserInfoUI() {
+    const userInfo = document.getElementById("user-info");
+    const guestNameInput = document.getElementById("guest-name-input");
+    const userInfoName = document.getElementById("user-info-name");
+    const userInfoAdmin = document.getElementById("user-info-admin");
+    if (currentUser) {
+      userInfo.style.display = "flex";
+      guestNameInput.style.display = "none";
+      userInfoName.textContent = currentUser.username;
+      userInfoAdmin.style.display = currentUser.isAdmin ? "inline-block" : "none";
+    } else {
+      userInfo.style.display = "none";
+      guestNameInput.style.display = "block";
+    }
+  }
+
+  // Logout button
+  document.getElementById("btn-logout").onclick = async () => {
+    if (sessionToken) {
+      try {
+        await fetch("/api/logout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: sessionToken }),
+        });
+      } catch {}
+    }
+    sessionToken = null;
+    localStorage.removeItem("kf_session_token");
+    currentUser = null;
+    updateUserInfoUI();
+    showScreen("auth");
+  };
+
+  // Pri startu ověř session token
+  async function checkSession() {
+    if (!sessionToken) {
+      showScreen("auth");
+      return;
+    }
+    try {
+      const resp = await fetch("/api/me", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: sessionToken }),
+      });
+      const data = await resp.json();
+      if (data.ok) {
+        currentUser = { username: data.username, isAdmin: data.isAdmin };
+        updateUserInfoUI();
+        showScreen("menu");
+      } else {
+        sessionToken = null;
+        localStorage.removeItem("kf_session_token");
+        showScreen("auth");
+      }
+    } catch {
+      showScreen("auth");
+    }
+  }
+  checkSession();
 
   // Animovane pozadi v menu - mini simulace botu
-  initMenuTrailer();
+  initMenuTrailer("menu-bg", "menu");
+  initMenuTrailer("auth-bg", "auth");
 
-  function initMenuTrailer() {
-    const canvas = document.getElementById("menu-bg");
+  function initMenuTrailer(canvasId, screenId) {
+    const canvas = document.getElementById(canvasId);
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
 
@@ -102,8 +273,8 @@
       const dt = Math.min(0.05, (now - lastTime) / 1000);
       lastTime = now;
 
-      const menuActive = document.getElementById("menu")?.classList.contains("active");
-      if (!menuActive) return;
+      const screenActive = document.getElementById(screenId)?.classList.contains("active");
+      if (!screenActive) return;
       if (!SHARED || !SHARED.MAPS) return;
 
       if (!initialized) initBots();
@@ -525,11 +696,11 @@
   document.getElementById("btn-refresh").onclick = refreshRooms;
 
   function saveName() {
-    const n = nameInput.value.trim() || "Player";
+    // Pokud jsem prihlasen, pouzij username z uctu, jinak input
+    const n = currentUser?.username || (nameInput?.value || "").trim() || "Player";
     localStorage.setItem("gm_name", n);
-    const adminToken = localStorage.getItem("kf_admin_token") || null;
     const isTouch = ("ontouchstart" in window) || navigator.maxTouchPoints > 0;
-    socket.emit("hello", { name: n, adminToken, isTouch });
+    socket.emit("hello", { name: n, sessionToken, isTouch });
   }
 
   // Server posila novy token pri uspesnem login
@@ -601,17 +772,21 @@
     showScreen("lobby");
   }
 
-  // Pri prvnim pripojeni posli token (pokud existuje) pro auto-login
-  const savedAdminToken = localStorage.getItem("kf_admin_token") || null;
+  // Pri prvnim pripojeni posli session token (pokud existuje) pro auto-login
   const isTouchInit = ("ontouchstart" in window) || navigator.maxTouchPoints > 0;
-  socket.emit("hello", { name: nameInput.value, adminToken: savedAdminToken, isTouch: isTouchInit }, (resp) => {
+  const initialName = currentUser?.username || nameInput?.value || "Guest";
+  socket.emit("hello", { name: initialName, sessionToken, isTouch: isTouchInit }, (resp) => {
     if (resp?.shared) {
       // SHARED dostaneme uz pri hello - umozni trailer simulaci v menu
       SHARED = resp.shared;
     }
+    if (resp?.username) {
+      // Server overil session token
+      currentUser = { username: resp.username, isAdmin: resp.isAdmin };
+      updateUserInfoUI();
+    }
     if (resp?.isAdmin) {
-      // Server nas overil jako admina - krátke potvrzeni v konzoli
-      console.log("[KNOCKFRIEND] Auto-login as admin (token valid)");
+      console.log("[KNOCKFRIEND] Logged in as admin: " + resp.username);
     }
     refreshRooms();
   });

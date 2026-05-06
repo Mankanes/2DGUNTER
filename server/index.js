@@ -927,56 +927,229 @@ const io = new Server(server, {
 // Pokud neni nastavena, pouzije se default - ZMEN HO!
 // Pouzivani: v chatu napis  /login <heslo>
 // ============================================================
+// ============================================================
+// USER ACCOUNT SYSTEM - registrace + login + persistence
+// Pouziva se pro: prihlaseni hracu (jmeno = username), admin
+// Data se ukladaji do users.json (prezije sleep, smazane pri redeployi)
+// ============================================================
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "knockfriend2026";
 
-// Aktivni admin tokeny - in-memory, vyprši pri restartu serveru
-// Format: token -> { createdAt, lastUsedAt }
-const adminTokens = new Map();
-const TOKEN_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000; // 30 dni
+const fs = require("fs");
+const crypto = require("crypto");
+const USERS_FILE = path.join(__dirname, "..", "data", "users.json");
 
-function generateAdminToken() {
-  // Random token - 32 znaku
-  const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  let token = "";
-  for (let i = 0; i < 32; i++) {
-    token += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return token;
+// Zajisti ze data slozka existuje
+const dataDir = path.dirname(USERS_FILE);
+if (!fs.existsSync(dataDir)) {
+  fs.mkdirSync(dataDir, { recursive: true });
 }
 
-function createAdminToken() {
-  const token = generateAdminToken();
-  adminTokens.set(token, {
-    createdAt: Date.now(),
-    lastUsedAt: Date.now(),
-  });
-  // Cleanup starych tokenu
-  const now = Date.now();
-  for (const [t, data] of adminTokens) {
-    if (now - data.lastUsedAt > TOKEN_LIFETIME_MS) {
-      adminTokens.delete(t);
+// users: { username -> { username, passwordHash, salt, isAdmin, createdAt, lastLoginAt } }
+let users = {};
+// sessions: { token -> { username, createdAt, lastUsedAt } } - in-memory
+const sessions = new Map();
+const SESSION_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000; // 30 dni
+
+function loadUsers() {
+  try {
+    if (fs.existsSync(USERS_FILE)) {
+      const raw = fs.readFileSync(USERS_FILE, "utf8");
+      users = JSON.parse(raw);
+      console.log(`[USERS] Loaded ${Object.keys(users).length} users from disk`);
+    }
+  } catch (err) {
+    console.error("[USERS] Failed to load:", err.message);
+    users = {};
+  }
+}
+
+function saveUsers() {
+  try {
+    fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2), "utf8");
+  } catch (err) {
+    console.error("[USERS] Failed to save:", err.message);
+  }
+}
+
+function hashPassword(password, salt) {
+  return crypto.pbkdf2Sync(password, salt, 100000, 32, "sha256").toString("hex");
+}
+
+function generateSalt() {
+  return crypto.randomBytes(16).toString("hex");
+}
+
+function generateToken() {
+  return crypto.randomBytes(32).toString("hex");
+}
+
+function validateUsername(username) {
+  if (typeof username !== "string") return "Invalid username";
+  username = username.trim();
+  if (username.length < 3) return "Username must be at least 3 characters";
+  if (username.length > 16) return "Username max 16 characters";
+  if (!/^[a-zA-Z0-9_-]+$/.test(username)) return "Only letters, numbers, _ and -";
+  return null; // OK
+}
+
+function validatePassword(password) {
+  if (typeof password !== "string") return "Invalid password";
+  if (password.length < 4) return "Password must be at least 4 characters";
+  if (password.length > 64) return "Password too long";
+  return null;
+}
+
+function registerUser(username, password) {
+  const uErr = validateUsername(username);
+  if (uErr) return { ok: false, error: uErr };
+  const pErr = validatePassword(password);
+  if (pErr) return { ok: false, error: pErr };
+
+  const lcUsername = username.toLowerCase();
+  // Hledej case-insensitive
+  for (const u of Object.keys(users)) {
+    if (u.toLowerCase() === lcUsername) {
+      return { ok: false, error: "Username already taken" };
     }
   }
-  return token;
+
+  const salt = generateSalt();
+  const passwordHash = hashPassword(password, salt);
+  users[username] = {
+    username,
+    passwordHash,
+    salt,
+    isAdmin: false,
+    createdAt: Date.now(),
+    lastLoginAt: Date.now(),
+  };
+  saveUsers();
+
+  // Vytvor session
+  const token = generateToken();
+  sessions.set(token, { username, createdAt: Date.now(), lastUsedAt: Date.now() });
+
+  return { ok: true, token, username, isAdmin: false };
 }
 
-function validateAdminToken(token) {
-  if (!token || typeof token !== "string") return false;
-  const data = adminTokens.get(token);
-  if (!data) return false;
-  if (Date.now() - data.lastUsedAt > TOKEN_LIFETIME_MS) {
-    adminTokens.delete(token);
-    return false;
+function loginUser(username, password) {
+  const uErr = validateUsername(username);
+  if (uErr) return { ok: false, error: "Invalid credentials" };
+
+  // Najdi case-insensitive
+  let user = null;
+  let actualUsername = null;
+  const lcUsername = username.toLowerCase();
+  for (const u of Object.keys(users)) {
+    if (u.toLowerCase() === lcUsername) {
+      user = users[u];
+      actualUsername = u;
+      break;
+    }
+  }
+  if (!user) return { ok: false, error: "Invalid credentials" };
+
+  const hash = hashPassword(password, user.salt);
+  if (hash !== user.passwordHash) return { ok: false, error: "Invalid credentials" };
+
+  user.lastLoginAt = Date.now();
+  saveUsers();
+
+  const token = generateToken();
+  sessions.set(token, { username: actualUsername, createdAt: Date.now(), lastUsedAt: Date.now() });
+
+  return { ok: true, token, username: actualUsername, isAdmin: !!user.isAdmin };
+}
+
+function validateSession(token) {
+  if (!token || typeof token !== "string") return null;
+  const data = sessions.get(token);
+  if (!data) return null;
+  if (Date.now() - data.lastUsedAt > SESSION_LIFETIME_MS) {
+    sessions.delete(token);
+    return null;
   }
   data.lastUsedAt = Date.now();
+  const user = users[data.username];
+  if (!user) {
+    sessions.delete(token);
+    return null;
+  }
+  return { username: data.username, isAdmin: !!user.isAdmin };
+}
+
+function revokeSession(token) {
+  if (token) sessions.delete(token);
+}
+
+// Cleanup starych session kazdou hodinu
+setInterval(() => {
+  const now = Date.now();
+  for (const [t, data] of sessions) {
+    if (now - data.lastUsedAt > SESSION_LIFETIME_MS) {
+      sessions.delete(t);
+    }
+  }
+}, 60 * 60 * 1000);
+
+// Promote uzivatele na admina pomoci hesla
+function promoteToAdmin(username, providedPassword) {
+  if (providedPassword !== ADMIN_PASSWORD) return false;
+  const user = users[username];
+  if (!user) return false;
+  user.isAdmin = true;
+  saveUsers();
   return true;
 }
 
+loadUsers();
+
+// Zpetna kompatibilita - admin token system jeste zustava pro chat /login prikaz
+function generateAdminToken() {
+  return generateToken();
+}
+function validateAdminToken(token) {
+  const session = validateSession(token);
+  return session?.isAdmin === true;
+}
 function revokeAdminToken(token) {
-  if (token) adminTokens.delete(token);
+  revokeSession(token);
 }
 
 app.use(express.static(path.join(__dirname, "..", "public")));
+app.use(express.json());
+
+// User registrace
+app.post("/api/register", (req, res) => {
+  const { username, password } = req.body || {};
+  const result = registerUser(username, password);
+  res.json(result);
+});
+
+// User login
+app.post("/api/login", (req, res) => {
+  const { username, password } = req.body || {};
+  const result = loginUser(username, password);
+  res.json(result);
+});
+
+// Logout - revokne session
+app.post("/api/logout", (req, res) => {
+  const { token } = req.body || {};
+  revokeSession(token);
+  res.json({ ok: true });
+});
+
+// Validace session - klient pri startu zkontroluje jestli ma platny token
+app.post("/api/me", (req, res) => {
+  const { token } = req.body || {};
+  const session = validateSession(token);
+  if (session) {
+    res.json({ ok: true, username: session.username, isAdmin: session.isAdmin });
+  } else {
+    res.json({ ok: false });
+  }
+});
 
 app.get("/api/rooms", (_req, res) => {
   const list = [];
@@ -1040,18 +1213,32 @@ io.on("connection", (socket) => {
   socket.on("disconnect", () => clearInterval(pingInterval));
 
   socket.on("hello", (data, ack) => {
-    playerName = (data?.name || "Player").toString().slice(0, 16);
     socket.data.isTouch = !!data?.isTouch;
 
-    // Auto-login pokud klient ma platny admin token
-    if (data?.adminToken && validateAdminToken(data.adminToken)) {
-      socket.data.isAdmin = true;
-      socket.data.adminToken = data.adminToken;
+    // Pokus se o validaci session tokenu (registrovany ucet)
+    let sessionUsername = null;
+    if (data?.sessionToken) {
+      const session = validateSession(data.sessionToken);
+      if (session) {
+        sessionUsername = session.username;
+        socket.data.sessionToken = data.sessionToken;
+        socket.data.username = session.username;
+        socket.data.isAdmin = session.isAdmin;
+      }
+    }
+
+    // Pokud nema validni session, jen pouzij jmeno z dat (guest)
+    if (!sessionUsername) {
+      playerName = (data?.name || "Guest").toString().slice(0, 16);
+    } else {
+      // Prihlaseny uzivatel - pouzij jeho username
+      playerName = sessionUsername;
     }
 
     if (typeof ack === "function") {
       ack({
         ok: true, id: socket.id,
+        username: sessionUsername,
         isAdmin: !!socket.data.isAdmin,
         shared: serializeShared(),
         rooms: [...rooms.values()].map((r) => ({
@@ -1140,11 +1327,14 @@ io.on("connection", (socket) => {
       const password = cmd.replace(/^\/?login\s+/, "").trim();
       if (password === ADMIN_PASSWORD) {
         socket.data.isAdmin = true;
-        // Vytvor token a posli ho klientovi
-        const token = createAdminToken();
-        socket.data.adminToken = token;
-        socket.emit("admin_token", { token });
-        sendConsole(socket, "✓ Admin status povolen (zapamatovano)", "ok");
+        // Pokud je prihlaseny, ulozit do users.json (perzistentni)
+        if (socket.data.username) {
+          promoteToAdmin(socket.data.username, password);
+          sendConsole(socket, "✓ Admin status ulozen do uctu " + socket.data.username, "ok");
+        } else {
+          // Nepritlaseny - jen per-socket admin (ztrati se po reconnect)
+          sendConsole(socket, "✓ Admin status povolen (jen pro tuto session, prihlas se pro perzistenci)", "ok");
+        }
         // Pokud je v mistnosti, oznam vsem
         const roomId = socketRoom.get(socket.id);
         const room = rooms.get(roomId);

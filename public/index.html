@@ -17,7 +17,56 @@
     <button id="rotate-dismiss" class="btn">Pokračovat na výšku</button>
   </div>
   <div id="app">
-    <div id="menu" class="screen active">
+    <!-- AUTH OBRAZOVKA - login a register -->
+    <div id="auth" class="screen active">
+      <canvas id="auth-bg" class="menu-bg"></canvas>
+
+      <div class="menu-hero">
+        <div class="logo">
+          <span class="logo-text">KNOCKFRIEND</span>
+        </div>
+        <div class="tagline">Multiplayer game with friends · 2-8 players</div>
+      </div>
+
+      <div class="menu-card auth-card">
+        <div class="auth-tabs">
+          <button class="auth-tab active" data-tab="login">Login</button>
+          <button class="auth-tab" data-tab="register">Register</button>
+        </div>
+
+        <div id="auth-error" class="auth-error" style="display:none"></div>
+
+        <!-- LOGIN form -->
+        <div class="auth-form" id="login-form">
+          <label>Username</label>
+          <input id="login-username" type="text" maxlength="16" placeholder="Your username" autocomplete="username" />
+          <label>Password</label>
+          <input id="login-password" type="password" maxlength="64" placeholder="••••••••" autocomplete="current-password" />
+          <button id="btn-login" class="btn primary big">
+            <span class="btn-label">Log In</span>
+          </button>
+        </div>
+
+        <!-- REGISTER form -->
+        <div class="auth-form" id="register-form" style="display:none">
+          <label>Username</label>
+          <input id="register-username" type="text" maxlength="16" placeholder="Pick a username (3-16 chars)" autocomplete="username" />
+          <label>Password</label>
+          <input id="register-password" type="password" maxlength="64" placeholder="At least 4 characters" autocomplete="new-password" />
+          <label>Confirm password</label>
+          <input id="register-password2" type="password" maxlength="64" placeholder="Type it again" autocomplete="new-password" />
+          <button id="btn-register" class="btn primary big">
+            <span class="btn-label">Create Account</span>
+          </button>
+        </div>
+
+        <div class="auth-guest">
+          <button id="btn-guest" class="btn-link">Continue as Guest</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="menu" class="screen">
       <!-- Animovany trailer canvas na pozadi -->
       <canvas id="menu-bg" class="menu-bg"></canvas>
 
@@ -33,8 +82,20 @@
       </div>
 
       <div class="menu-card">
-        <label>Your nickname</label>
-        <input id="name-input" type="text" maxlength="16" placeholder="Player" />
+        <!-- User info - zobrazi se kdyz je prihlaseny -->
+        <div id="user-info" class="user-info" style="display:none">
+          <div class="user-info-text">
+            Logged in as <span id="user-info-name" class="user-info-name">user</span>
+            <span id="user-info-admin" class="user-info-admin" style="display:none">ADMIN</span>
+          </div>
+          <button id="btn-logout" class="btn-link">Log out</button>
+        </div>
+
+        <!-- Guest pouze - input pro jmeno -->
+        <div id="guest-name-input">
+          <label>Your nickname</label>
+          <input id="name-input" type="text" maxlength="16" placeholder="Player" />
+        </div>
 
         <button id="btn-quickplay" class="btn primary big">
           <span class="btn-label">Quick Play</span>

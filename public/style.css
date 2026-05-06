@@ -2160,3 +2160,130 @@ body.has-touch .minimap {
   .action-grid { grid-template-columns: 1fr; }
   .menu-footer { font-size: 10px; gap: 8px; padding: 10px 14px; }
 }
+
+/* ======================= AUTH SCREEN ======================= */
+#auth {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 20px;
+  position: relative;
+}
+#auth.active {
+  display: flex;
+}
+
+.auth-card {
+  max-width: 420px !important;
+}
+
+.auth-tabs {
+  display: flex;
+  gap: 4px;
+  background: rgba(10, 14, 26, 0.7);
+  border-radius: 10px;
+  padding: 4px;
+  margin-bottom: 20px;
+}
+.auth-tab {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #6b7a99;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  padding: 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+.auth-tab.active {
+  background: rgba(255, 138, 61, 0.15);
+  color: #ff8a3d;
+}
+.auth-tab:hover:not(.active) {
+  color: #94a3c4;
+}
+
+.auth-form label {
+  margin-top: 10px;
+  margin-bottom: 6px !important;
+}
+.auth-form input {
+  margin-bottom: 0 !important;
+}
+.auth-form .btn {
+  margin-top: 18px;
+}
+
+.auth-error {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #fca5a5;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  margin-bottom: 14px;
+  text-align: center;
+}
+
+.auth-guest {
+  margin-top: 18px;
+  text-align: center;
+  padding-top: 16px;
+  border-top: 1px solid rgba(74, 144, 226, 0.15);
+}
+
+.btn-link {
+  background: transparent;
+  border: none;
+  color: #94a3c4;
+  font-size: 12px;
+  letter-spacing: 1px;
+  cursor: pointer;
+  text-decoration: underline;
+  font-family: inherit;
+  padding: 4px 8px;
+  transition: color 0.15s;
+}
+.btn-link:hover {
+  color: #ff8a3d;
+}
+
+/* User info v menu */
+.user-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(10, 14, 26, 0.7);
+  border: 1px solid rgba(74, 144, 226, 0.2);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 18px;
+}
+.user-info-text {
+  font-size: 13px;
+  color: #94a3c4;
+  letter-spacing: 0.5px;
+}
+.user-info-name {
+  color: #ff8a3d;
+  font-weight: 700;
+  margin-left: 4px;
+}
+.user-info-admin {
+  display: inline-block;
+  background: rgba(255, 215, 0, 0.2);
+  color: #ffd700;
+  font-size: 10px;
+  letter-spacing: 1px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: 6px;
+  font-weight: 700;
+}
