@@ -1334,7 +1334,7 @@ io.on("connection", (socket) => {
 
   // Konzolove prikazy (jako CS) - pouze pro adminy (krome /login)
   let nextBotIdNum = 1;
-  socket.on("console", (data) => {
+  function consoleHandler(data) {
     const cmd = (data?.cmd || "").toString().trim();
     if (!cmd) return;
 
@@ -1564,10 +1564,25 @@ io.on("connection", (socket) => {
     } catch (e) {
       sendConsole(socket, "Chyba: " + e.message, "error");
     }
-  });
+  }
+  // Registrace event handleru - volá interni consoleHandler
+  socket.on("console", consoleHandler);
 
   function sendConsole(s, text, type) {
     s.emit("console", { text, type: type || "info" });
+    // Take posli jako chat (aby to videli mobilni uzivatele)
+    const colors = {
+      ok: "#4ade80",
+      error: "#ef4444",
+      info: "#94a3c4",
+    };
+    s.emit("chat", {
+      id: "system",
+      name: "CONSOLE",
+      color: colors[type] || colors.info,
+      text,
+      time: Date.now(),
+    });
   }
 
   socket.on("input", (data) => {
@@ -1588,16 +1603,20 @@ io.on("connection", (socket) => {
     if (!player) return;
 
     const now = Date.now();
-    // Rate limit: max 1 zprava za 500ms
-    if (now - lastChatTime < 500) return;
-    // Anti-spam: max 5 zprav za 5 sekund
-    chatHistory.push(now);
-    while (chatHistory.length && now - chatHistory[0] > 5000) chatHistory.shift();
-    if (chatHistory.length > 5) return;
-    lastChatTime = now;
-
     let text = (data?.text || "").toString().slice(0, 100).trim();
     if (!text) return;
+
+    // Rate limit pouze pro normalni chat zpravy, ne pro prikazy
+    const isCommand = text.startsWith("/");
+    if (!isCommand) {
+      // Rate limit: max 1 zprava za 500ms
+      if (now - lastChatTime < 500) return;
+      // Anti-spam: max 5 zprav za 5 sekund
+      chatHistory.push(now);
+      while (chatHistory.length && now - chatHistory[0] > 5000) chatHistory.shift();
+      if (chatHistory.length > 5) return;
+      lastChatTime = now;
+    }
 
     // Admin login - heslo se nikdy nesmi objevit v chatu
     if (text.startsWith("/login ")) {
@@ -1672,6 +1691,17 @@ io.on("connection", (socket) => {
       });
       io.to(roomId).emit("room_info", roomInfo(room));
       return;
+    }
+
+    // Pokud zprava zacina lomitkem, zpracuj jako konzolovy prikaz
+    // (umoznuje pouzivat /bot, /kill, /give, atd. z mobilu kde neni konzole)
+    if (text.startsWith("/")) {
+      const cmdText = text.slice(1).trim(); // odstran lomitko
+      if (cmdText) {
+        // Spust stejnou logiku jako "console" event
+        consoleHandler({ cmd: cmdText });
+      }
+      return; // /command se nikdy nebroadcastuje
     }
 
     io.to(roomId).emit("chat", {
