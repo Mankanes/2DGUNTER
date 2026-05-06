@@ -897,6 +897,22 @@
     }
   });
 
+  // Server posila update statusu (admin/tester promotion bez reloglu)
+  socket.on("user_status_update", (data) => {
+    if (currentUser) {
+      currentUser.isAdmin = !!data.isAdmin;
+      currentUser.isTester = !!data.isTester;
+      updateUserInfoUI();
+    }
+  });
+
+  // Server hlasi ze friends data se zmenily (request, accept, remove)
+  socket.on("friends_changed", () => {
+    if (currentUser && typeof refreshFriendsList === "function") {
+      refreshFriendsList();
+    }
+  });
+
   function refreshRooms() {
     fetch("/api/rooms")
       .then((r) => r.json())

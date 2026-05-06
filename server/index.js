@@ -1348,6 +1348,15 @@ app.post("/api/users/search", async (req, res) => {
   res.json({ ok: true, users: results });
 });
 
+// Helper - emit event vsem socketum daneho usera (pro live updates)
+function emitToUser(username, event, data) {
+  for (const [id, sock] of io.sockets.sockets) {
+    if (sock.data?.username === username) {
+      sock.emit(event, data);
+    }
+  }
+}
+
 // Posli friend request
 app.post("/api/friends/request", async (req, res) => {
   const session = requireAuth(req, res);
@@ -1382,6 +1391,8 @@ app.post("/api/friends/request", async (req, res) => {
             { from: targetUsername, to: session.username },
             { $set: { status: "accepted", acceptedAt: Date.now() } }
           );
+          emitToUser(session.username, "friends_changed", {});
+          emitToUser(targetUsername, "friends_changed", {});
           res.json({ ok: true, autoAccepted: true });
         }
         return;
@@ -1392,6 +1403,9 @@ app.post("/api/friends/request", async (req, res) => {
         status: "pending",
         createdAt: Date.now(),
       });
+      // Notify obema klientum aby se panel updatnul
+      emitToUser(session.username, "friends_changed", {});
+      emitToUser(targetUsername, "friends_changed", {});
       res.json({ ok: true });
     } catch (err) {
       console.error("[FRIENDS] Request error:", err.message);
@@ -1423,6 +1437,8 @@ app.post("/api/friends/request", async (req, res) => {
       createdAt: Date.now(),
     });
     saveFriendsFile();
+    emitToUser(session.username, "friends_changed", {});
+    emitToUser(targetUsername, "friends_changed", {});
     res.json({ ok: true });
   }
 });
@@ -1445,6 +1461,8 @@ app.post("/api/friends/accept", async (req, res) => {
       if (result.matchedCount === 0) {
         res.json({ ok: false, error: "Request not found" });
       } else {
+        emitToUser(session.username, "friends_changed", {});
+        emitToUser(fromUsername, "friends_changed", {});
         res.json({ ok: true });
       }
     } catch (err) {
@@ -1458,6 +1476,8 @@ app.post("/api/friends/accept", async (req, res) => {
       f.status = "accepted";
       f.acceptedAt = Date.now();
       saveFriendsFile();
+      emitToUser(session.username, "friends_changed", {});
+      emitToUser(fromUsername, "friends_changed", {});
       res.json({ ok: true });
     }
   }
@@ -1480,6 +1500,8 @@ app.post("/api/friends/remove", async (req, res) => {
           { from: otherUsername, to: session.username },
         ],
       });
+      emitToUser(session.username, "friends_changed", {});
+      emitToUser(otherUsername, "friends_changed", {});
       res.json({ ok: true });
     } catch (err) {
       res.json({ ok: false, error: "Server error" });
@@ -1490,6 +1512,8 @@ app.post("/api/friends/remove", async (req, res) => {
         (f.from === otherUsername && f.to === session.username))
     );
     saveFriendsFile();
+    emitToUser(session.username, "friends_changed", {});
+    emitToUser(otherUsername, "friends_changed", {});
     res.json({ ok: true });
   }
 });
@@ -1736,6 +1760,12 @@ io.on("connection", (socket) => {
           // Nepritlaseny - jen per-socket admin (ztrati se po reconnect)
           sendConsole(socket, "✓ Admin status povolen (jen pro tuto session, prihlas se pro perzistenci)", "ok");
         }
+        // Posli klientovi update statusu (aby se UI aktualizovalo bez reloglu)
+        socket.emit("user_status_update", {
+          username: socket.data.username,
+          isAdmin: true,
+          isTester: !!socket.data.isTester,
+        });
         // Pokud je v mistnosti, oznam vsem
         const roomId = socketRoom.get(socket.id);
         const room = rooms.get(roomId);
@@ -1761,6 +1791,11 @@ io.on("connection", (socket) => {
         } else {
           sendConsole(socket, "✓ Tester status povolen (jen pro tuto session, prihlas se pro perzistenci)", "ok");
         }
+        socket.emit("user_status_update", {
+          username: socket.data.username,
+          isAdmin: !!socket.data.isAdmin,
+          isTester: true,
+        });
         // Oznam v mistnosti
         const roomId = socketRoom.get(socket.id);
         const room = rooms.get(roomId);
@@ -2013,6 +2048,12 @@ io.on("connection", (socket) => {
         if (socket.data.username) {
           promoteToAdmin(socket.data.username, password);
         }
+        // Posli klientovi update statusu (aby se UI aktualizovalo bez reloglu)
+        socket.emit("user_status_update", {
+          username: socket.data.username,
+          isAdmin: true,
+          isTester: !!socket.data.isTester,
+        });
         socket.emit("chat", {
           id: "system",
           name: "SYSTEM",
@@ -2034,6 +2075,11 @@ io.on("connection", (socket) => {
         if (socket.data.username) {
           promoteToTester(socket.data.username, password);
         }
+        socket.emit("user_status_update", {
+          username: socket.data.username,
+          isAdmin: !!socket.data.isAdmin,
+          isTester: true,
+        });
         socket.emit("chat", {
           id: "system",
           name: "SYSTEM",
