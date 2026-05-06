@@ -1510,6 +1510,9 @@
     if (isConsoleOpen || isChatOpen) return;
     // Pokud je settings modal otevreny (a poslouchame klavesu pro keybind), nereaguj
     if (isListeningForKey) return;
+    // Pokud je focus v input/textarea, nereaguj (uzivatel pise text)
+    const tag = (document.activeElement?.tagName || "").toLowerCase();
+    if (tag === "input" || tag === "textarea" || tag === "select") return;
 
     // Tab - rozsireny scoreboard (drz pro zobrazeni)
     if (e.key === "Tab" && screens.game.classList.contains("active")) {
@@ -1553,6 +1556,9 @@
   document.addEventListener("keyup", (e) => {
     if (isConsoleOpen || isChatOpen) return;
     if (isListeningForKey) return;
+    // Pokud je focus v input/textarea, nereaguj
+    const tag = (document.activeElement?.tagName || "").toLowerCase();
+    if (tag === "input" || tag === "textarea" || tag === "select") return;
 
     // Tab pusten - schovej scoreboard
     if (e.key === "Tab") {
@@ -1855,6 +1861,8 @@
   // Klavesa F = fullscreen toggle (PC)
   document.addEventListener("keydown", (e) => {
     if (isConsoleOpen || isChatOpen || isListeningForKey) return;
+    const tag = (document.activeElement?.tagName || "").toLowerCase();
+    if (tag === "input" || tag === "textarea" || tag === "select") return;
     if (e.key === "F11" || (e.key === "f" && e.ctrlKey)) {
       e.preventDefault();
       toggleFullscreen();
