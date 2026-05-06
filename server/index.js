@@ -400,6 +400,22 @@ class Game {
       this.matchWinner = matchWinner;
       this.phase = "matchover";
       this.phaseTimer = 8.0;
+      // Tracking statistik - gamesPlayed pro vsechny, wins pro vyherce, playTime
+      const now = Date.now();
+      for (const p of this.players.values()) {
+        if (p.isBot || !p.username) continue;
+        if (!users[p.username]) continue;
+        if (!users[p.username].stats) users[p.username].stats = { gamesPlayed: 0, kills: 0, deaths: 0, wins: 0, playTimeMs: 0 };
+        users[p.username].stats.gamesPlayed++;
+        if (p.id === matchWinner) {
+          users[p.username].stats.wins++;
+        }
+        if (p.matchStartTime) {
+          users[p.username].stats.playTimeMs += (now - p.matchStartTime);
+          p.matchStartTime = now; // reset pro dalsi match
+        }
+        saveUser(p.username);
+      }
     } else {
       this.phase = "postround";
       this.phaseTimer = SHARED.ROUND.POST_ROUND;
@@ -789,9 +805,22 @@ class Game {
     victim.alive = false;
     victim.hp = 0;
     victim.deaths++;
+    // Tracking statistik - jen pro prihlasene hrace
+    if (victim.username && users[victim.username]) {
+      if (!users[victim.username].stats) users[victim.username].stats = { gamesPlayed: 0, kills: 0, deaths: 0, wins: 0, playTimeMs: 0 };
+      users[victim.username].stats.deaths++;
+      saveUser(victim.username);
+    }
     if (killerId && killerId !== victim.id) {
       const k = this.players.get(killerId);
-      if (k) k.kills++;
+      if (k) {
+        k.kills++;
+        if (k.username && users[k.username]) {
+          if (!users[k.username].stats) users[k.username].stats = { gamesPlayed: 0, kills: 0, deaths: 0, wins: 0, playTimeMs: 0 };
+          users[k.username].stats.kills++;
+          saveUser(k.username);
+        }
+      }
     }
     this.events.push({ type: "death", victimId: victim.id, killerId, cause });
   }
@@ -1024,6 +1053,7 @@ async function loadUsers() {
         users[u.username] = userData;
       }
       console.log(`[DB] Loaded ${all.length} users from MongoDB`);
+      migrateUserStats();
       return;
     } catch (err) {
       console.error("[DB] MongoDB load error:", err.message);
@@ -1039,6 +1069,22 @@ async function loadUsers() {
   } catch (err) {
     console.error("[DB] File load error:", err.message);
     users = {};
+  }
+  migrateUserStats();
+}
+
+// Migrace - kdyby user neměl stats (existoval pred pridanim featuru)
+function migrateUserStats() {
+  for (const u of Object.values(users)) {
+    if (!u.stats) {
+      u.stats = {
+        gamesPlayed: 0,
+        kills: 0,
+        deaths: 0,
+        wins: 0,
+        playTimeMs: 0,
+      };
+    }
   }
 }
 
@@ -1137,6 +1183,14 @@ function registerUser(username, password) {
     isTester: false,
     createdAt: Date.now(),
     lastLoginAt: Date.now(),
+    // Statistiky
+    stats: {
+      gamesPlayed: 0,    // pocet odehranych zapasu (matchu)
+      kills: 0,          // celkem killu
+      deaths: 0,         // celkem smrti
+      wins: 0,           // pocet vyhranych matchu
+      playTimeMs: 0,     // celkovy cas ve hre (millisekundy)
+    },
   };
   saveUsers();
 
@@ -1356,6 +1410,51 @@ function emitToUser(username, event, data) {
     }
   }
 }
+
+// ============================================================
+// STATS API
+// ============================================================
+
+// Stats prihlaseneho uzivatele
+app.post("/api/stats/me", (req, res) => {
+  const session = requireAuth(req, res);
+  if (!session) return;
+  const user = users[session.username];
+  if (!user) {
+    res.json({ ok: false, error: "User not found" });
+    return;
+  }
+  const stats = user.stats || { gamesPlayed: 0, kills: 0, deaths: 0, wins: 0, playTimeMs: 0 };
+  res.json({ ok: true, stats });
+});
+
+// Globalni stats - soucet pres vsechny uzivatele
+app.get("/api/stats/global", (_req, res) => {
+  let totalPlayers = 0;
+  let totalGames = 0;
+  let totalKills = 0;
+  let totalDeaths = 0;
+  let totalPlayTimeMs = 0;
+  for (const u of Object.values(users)) {
+    totalPlayers++;
+    if (u.stats) {
+      totalGames += u.stats.gamesPlayed || 0;
+      totalKills += u.stats.kills || 0;
+      totalDeaths += u.stats.deaths || 0;
+      totalPlayTimeMs += u.stats.playTimeMs || 0;
+    }
+  }
+  res.json({
+    ok: true,
+    stats: {
+      totalPlayers,
+      totalGames,
+      totalKills,
+      totalDeaths,
+      totalPlayTimeMs,
+    },
+  });
+});
 
 // Posli friend request
 app.post("/api/friends/request", async (req, res) => {
@@ -2194,6 +2293,12 @@ function joinRoom(socket, roomId, name, ack) {
   if (socket.data && socket.data.isTester) {
     p.isTester = true;
   }
+  // Username (jen pokud je prihlasen) - pro tracking statistik
+  if (socket.data && socket.data.username) {
+    p.username = socket.data.username;
+  }
+  // Track time spent in matches
+  p.matchStartTime = Date.now();
   socket.join(roomId);
   socketRoom.set(socket.id, roomId);
 

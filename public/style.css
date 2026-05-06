@@ -2606,3 +2606,76 @@ body.has-touch .minimap {
     display: none !important;
   }
 }
+
+/* ======================= STATS PANEL ======================= */
+.stats-panel {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  width: 240px;
+  background: rgba(15, 20, 36, 0.95);
+  border: 1px solid rgba(74, 144, 226, 0.25);
+  border-radius: 14px;
+  padding: 16px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  pointer-events: auto;
+}
+
+.stats-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.stats-section-title {
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: #ff8a3d;
+  text-transform: uppercase;
+  font-weight: 700;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(74, 144, 226, 0.2);
+  margin-bottom: 4px;
+}
+
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 6px;
+  font-size: 12px;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+.stat-row:hover {
+  background: rgba(74, 144, 226, 0.08);
+}
+.stat-label {
+  color: #94a3c4;
+  letter-spacing: 0.5px;
+}
+.stat-value {
+  color: #fff;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Mobile - panel se schova (mensi obrazovky maji prednost herniho UI) */
+@media (max-width: 900px) {
+  .stats-panel {
+    display: none !important;
+  }
+}
+
+/* Settings tlacitko nesmi prekryvat stats panel - posun ho doprava */
+@media (min-width: 901px) {
+  .btn-settings {
+    left: 280px !important;
+  }
+}

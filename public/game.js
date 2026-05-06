@@ -151,11 +151,15 @@
         friendsPanel.style.display = "flex";
         refreshFriendsList();
       }
+      // Refresh stats (zobrazi moje stats sekci)
+      if (typeof refreshStats === "function") refreshStats();
     } else {
       userInfo.style.display = "none";
       guestNameInput.style.display = "block";
       // Skry friends panel
       if (friendsPanel) friendsPanel.style.display = "none";
+      // Refresh stats (skryje moje stats sekci)
+      if (typeof refreshStats === "function") refreshStats();
     }
   }
 
@@ -376,6 +380,57 @@
       refreshFriendsList();
     }
   }, 15000);
+
+  // ---------- STATS PANEL ----------
+  function formatHours(ms) {
+    const hours = ms / (1000 * 60 * 60);
+    if (hours < 1) {
+      const minutes = ms / (1000 * 60);
+      return minutes.toFixed(0) + "m";
+    }
+    return hours.toFixed(1);
+  }
+
+  async function refreshStats() {
+    // Globalni stats - vsem (i guestum)
+    try {
+      const r = await fetch("/api/stats/global");
+      const data = await r.json();
+      if (data.ok) {
+        const s = data.stats;
+        document.getElementById("stat-global-players").textContent = s.totalPlayers;
+        document.getElementById("stat-global-games").textContent = s.totalGames;
+        document.getElementById("stat-global-kills").textContent = s.totalKills;
+        document.getElementById("stat-global-hours").textContent = formatHours(s.totalPlayTimeMs);
+      }
+    } catch (err) {}
+
+    // Moje stats - jen pokud prihlasen
+    const mySection = document.getElementById("my-stats-section");
+    if (currentUser && sessionToken) {
+      const data = await apiCall("/api/stats/me", {});
+      if (data.ok) {
+        mySection.style.display = "flex";
+        const s = data.stats;
+        document.getElementById("stat-my-games").textContent = s.gamesPlayed;
+        document.getElementById("stat-my-hours").textContent = formatHours(s.playTimeMs);
+        document.getElementById("stat-my-kills").textContent = s.kills;
+        document.getElementById("stat-my-wins").textContent = s.wins;
+        const kd = s.deaths > 0 ? (s.kills / s.deaths).toFixed(2) : s.kills.toFixed(2);
+        document.getElementById("stat-my-kd").textContent = kd;
+      }
+    } else {
+      mySection.style.display = "none";
+    }
+  }
+
+  // Initial refresh + auto-refresh kazdych 30s
+  refreshStats();
+  setInterval(() => {
+    if (document.getElementById("menu")?.classList.contains("active")) {
+      refreshStats();
+    }
+  }, 30000);
 
   // Animovane pozadi v menu - mini simulace botu
   initMenuTrailer("menu-bg", "menu");
