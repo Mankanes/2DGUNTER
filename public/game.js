@@ -9,7 +9,7 @@
   let selfId = null;
   let roomId = null;
 
-  const SNAPSHOT_BUFFER_MS = 100;
+  const SNAPSHOT_BUFFER_MS = 70;
   const snapshots = [];
 
   const screens = {
@@ -2274,7 +2274,7 @@
       shoot: input.shoot, aimX, aimY, switch: input.switch,
     });
     input.switch = null;
-  }, 1000 / 30);
+  }, 1000 / 60);
 
   // ---------- SNAPSHOTS / INTERPOLATION ----------
   socket.on("state", (snap) => {

@@ -13,7 +13,7 @@ const { Server } = require("socket.io");
 // ============================================================
 
 const SHARED = {
-  TICK_RATE: 30,                // server simulation Hz (sniženo na 30 pro lepsi vykon na pomalem hostingu)
+  TICK_RATE: 60,                // server simulation Hz (60 pro plynuly movement)
   WORLD_WIDTH: 1600,
   WORLD_HEIGHT: 900,
   GRAVITY: 1800,
@@ -57,9 +57,9 @@ const SHARED = {
       bulletLife: 0.55, bulletRadius: 4, ammo: 18, color: "#ff9f43",
     },
     rocket: {
-      name: "Rocket Launcher", damage: 45, splashDamage: 35, splashRadius: 130,
+      name: "Rocket Launcher", damage: 45, splashDamage: 35, splashRadius: 160,
       fireRate: 0.95, bulletSpeed: 700, bulletGravity: 0.10, spread: 0.0,
-      pelletsPerShot: 1, recoil: 520, knockback: 700,
+      pelletsPerShot: 1, recoil: 520, knockback: 1400,
       bulletLife: 3.0, bulletRadius: 8, ammo: 5, color: "#ff5252", isRocket: true,
     },
     laser: {
@@ -726,6 +726,12 @@ class Game {
 
   applyBulletHit(b, victim) {
     if (b.isRocket) {
+      // Pred explozi - pridej extra direct hit damage (raketa trefila primo)
+      victim.hp -= b.damage;
+      this.events.push({
+        type: "hit", x: b.x, y: b.y,
+        victimId: victim.id, damage: b.damage, weapon: b.weapon,
+      });
       this.explode(b);
     } else {
       victim.hp -= b.damage;
@@ -771,16 +777,21 @@ class Game {
       const cy = p.y + SHARED.PLAYER.HEIGHT / 2;
       const dist = Math.hypot(cx - b.x, cy - b.y);
       if (dist < b.splashRadius) {
-        const falloff = 1 - dist / b.splashRadius;
+        const linearFalloff = 1 - dist / b.splashRadius;
+        // Damage stale linearni
         const dmg = (p.id === b.ownerId
-          ? Math.round(b.splashDamage * 0.5 * falloff)
-          : Math.round(b.splashDamage * falloff));
+          ? Math.round(b.splashDamage * 0.5 * linearFalloff)
+          : Math.round(b.splashDamage * linearFalloff));
         if (p.id !== b.ownerId || dmg > 0) p.hp -= dmg;
+        // Knockback - kvadraticky falloff (vetsi rozdil mezi blizko a daleko)
+        // + minimum knockback ze i daleky zasah te postrci
+        const knockFalloff = Math.max(0.35, linearFalloff * linearFalloff);
         const nx = (cx - b.x) / (dist || 1);
         const ny = (cy - b.y) / (dist || 1);
-        const force = b.knockback * falloff;
+        const force = b.knockback * knockFalloff;
         p.knockbackVx += nx * force;
-        p.knockbackVy += ny * force - 120;
+        // Vetsi vertikalni boost - rakety hraci vyhozuji do vzduchu
+        p.knockbackVy += ny * force - 350;
         if (p.hp <= 0) {
           this.killPlayer(p, b.ownerId, "rocket");
         }
