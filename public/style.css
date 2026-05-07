@@ -2990,3 +2990,8 @@ body {
   top: 0;
   left: 0;
 }
+
+/* Feedback tlacitko - schovany kdyz je hra aktivni (jen v menu/lobby/auth) */
+body:has(#game.screen.active) .btn-feedback {
+  display: none;
+}

@@ -20,6 +20,11 @@
   };
   function showScreen(name) {
     for (const k in screens) screens[k].classList.toggle("active", k === name);
+    // Feedback tlacitko - viditelne jen mimo hru (menu, lobby, auth)
+    const fbBtn = document.getElementById("btn-open-feedback");
+    if (fbBtn) {
+      fbBtn.style.display = (name === "game") ? "none" : "flex";
+    }
   }
 
   // ---------- AUTH ----------
