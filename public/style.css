@@ -2926,3 +2926,30 @@ body.has-touch .minimap {
   border: 3px solid #4ade80;
   margin-bottom: 12px;
 }
+
+/* ======================= COPYRIGHT ======================= */
+.menu-copyright {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  color: #5a6a90;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+  z-index: 5;
+  text-shadow: 0 0 8px rgba(0, 0, 0, 0.8);
+}
+
+/* Mobile - jen mensi pismo, posunute v�z aby nezasahovalo do feedback btn */
+@media (max-width: 700px) {
+  .menu-copyright {
+    font-size: 9px;
+    bottom: 8px;
+    letter-spacing: 1px;
+  }
+}
