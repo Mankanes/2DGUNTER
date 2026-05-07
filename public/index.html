@@ -239,6 +239,72 @@
     <!-- Settings tlacitko - vzdy viditelne v rohu -->
     <button id="btn-open-settings" class="btn-settings" title="Settings">⚙</button>
 
+    <!-- Feedback button - vpravo dole, vzdy viditelny -->
+    <button id="btn-open-feedback" class="btn-feedback" title="Send feedback">
+      <span class="fb-icon">💬</span>
+      <span class="fb-label">Feedback</span>
+    </button>
+
+    <!-- Feedback modal -->
+    <div id="feedback-modal" class="modal-overlay">
+      <div class="modal-card feedback-card">
+        <div class="modal-header">
+          <h2>SHARE YOUR FEEDBACK</h2>
+          <button id="btn-close-feedback" class="btn-icon">×</button>
+        </div>
+
+        <div class="modal-body">
+          <p class="feedback-intro">
+            Help us make KNOCKFRIEND better! Your feedback is appreciated. 🙌
+          </p>
+
+          <!-- Rating hvezdicky -->
+          <div class="feedback-section">
+            <label class="feedback-label">How much do you like the game?</label>
+            <div id="feedback-rating" class="rating-stars">
+              <span class="star" data-rating="1">★</span>
+              <span class="star" data-rating="2">★</span>
+              <span class="star" data-rating="3">★</span>
+              <span class="star" data-rating="4">★</span>
+              <span class="star" data-rating="5">★</span>
+            </div>
+            <div id="feedback-rating-text" class="rating-text"></div>
+          </div>
+
+          <!-- Co se libi -->
+          <div class="feedback-section">
+            <label class="feedback-label">What do you like the most? <span class="feedback-optional">(optional)</span></label>
+            <textarea id="feedback-likes" placeholder="The maps, weapons, friend system..." maxlength="500"></textarea>
+          </div>
+
+          <!-- Bugs -->
+          <div class="feedback-section">
+            <label class="feedback-label">🐛 Found any bugs? <span class="feedback-optional">(optional)</span></label>
+            <textarea id="feedback-bugs" placeholder="Describe what happened, on which device, etc..." maxlength="1000"></textarea>
+          </div>
+
+          <!-- Suggestions -->
+          <div class="feedback-section">
+            <label class="feedback-label">💡 Ideas for improvement <span class="feedback-optional">(optional)</span></label>
+            <textarea id="feedback-suggestions" placeholder="New weapons, maps, features..." maxlength="1000"></textarea>
+          </div>
+
+          <div id="feedback-error" class="auth-error" style="display:none"></div>
+
+          <div class="settings-actions">
+            <button id="btn-submit-feedback" class="btn primary big">
+              <span class="btn-label">Send feedback</span>
+            </button>
+          </div>
+
+          <div id="feedback-success" class="feedback-success" style="display:none">
+            <div class="feedback-success-icon">✓</div>
+            <div>Thanks for your feedback!</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Settings modal -->
     <div id="settings-modal" class="modal-overlay">
       <div class="modal-card">

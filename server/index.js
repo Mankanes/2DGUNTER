@@ -998,11 +998,16 @@ const MONGODB_URI = process.env.MONGODB_URI || null;
 let mongoClient = null;
 let mongoUsers = null; // collection
 let mongoFriends = null; // collection pro pratele
+let mongoFeedback = null; // collection pro feedback
 let mongoEnabled = false;
 
 // Friends file fallback - jednoduchy JSON file
 const FRIENDS_FILE = path.join(__dirname, "..", "data", "friends.json");
 let friendsData = []; // [{ from, to, status, createdAt, acceptedAt }]
+
+// Feedback file fallback
+const FEEDBACK_FILE = path.join(__dirname, "..", "data", "feedback.json");
+let feedbackData = []; // [{ username, rating, bugs, suggestions, likes, createdAt }]
 
 function loadFriendsFile() {
   try {
@@ -1018,6 +1023,23 @@ function saveFriendsFile() {
     fs.writeFileSync(FRIENDS_FILE, JSON.stringify(friendsData, null, 2), "utf8");
   } catch (err) {
     console.error("[FRIENDS] Save error:", err.message);
+  }
+}
+
+function loadFeedbackFile() {
+  try {
+    if (fs.existsSync(FEEDBACK_FILE)) {
+      feedbackData = JSON.parse(fs.readFileSync(FEEDBACK_FILE, "utf8"));
+    }
+  } catch (err) {
+    feedbackData = [];
+  }
+}
+function saveFeedbackFile() {
+  try {
+    fs.writeFileSync(FEEDBACK_FILE, JSON.stringify(feedbackData, null, 2), "utf8");
+  } catch (err) {
+    console.error("[FEEDBACK] Save error:", err.message);
   }
 }
 
@@ -1038,12 +1060,15 @@ async function initMongo() {
     const db = mongoClient.db("knockfriend");
     mongoUsers = db.collection("users");
     mongoFriends = db.collection("friends");
+    mongoFeedback = db.collection("feedback");
     // Vytvor unique index na username (pokud jeste neni)
     await mongoUsers.createIndex({ username: 1 }, { unique: true });
     // Index pro friends - rychle dotazy na from/to
     await mongoFriends.createIndex({ from: 1, to: 1 }, { unique: true });
     await mongoFriends.createIndex({ to: 1, status: 1 });
     await mongoFriends.createIndex({ from: 1, status: 1 });
+    // Index pro feedback - sort podle data
+    await mongoFeedback.createIndex({ createdAt: -1 });
     mongoEnabled = true;
     console.log("[DB] MongoDB pripojena uspesne");
   } catch (err) {
@@ -1297,6 +1322,7 @@ function promoteToTester(username, providedPassword) {
   await initMongo();
   await loadUsers();
   loadFriendsFile(); // file fallback pro pratele
+  loadFeedbackFile(); // file fallback pro feedback
 })();
 
 // Zpetna kompatibilita - admin token system jeste zustava pro chat /login prikaz
@@ -1496,6 +1522,103 @@ app.get("/api/stats/leaderboard", (req, res) => {
   });
 
   res.json({ ok: true, players: list.slice(0, limit) });
+});
+
+// ============================================================
+// FEEDBACK API
+// ============================================================
+
+// Posli feedback (kdokoli, i guest)
+app.post("/api/feedback/submit", async (req, res) => {
+  const rating = parseInt(req.body?.rating) || 0;
+  const bugs = (req.body?.bugs || "").toString().slice(0, 1000).trim();
+  const suggestions = (req.body?.suggestions || "").toString().slice(0, 1000).trim();
+  const likes = (req.body?.likes || "").toString().slice(0, 500).trim();
+
+  if (rating < 1 || rating > 5) {
+    res.json({ ok: false, error: "Invalid rating" });
+    return;
+  }
+
+  // Username z token (pokud je prihlasen) nebo anonymous
+  const token = req.body?.token;
+  const session = validateSession(token);
+  const username = session ? session.username : "anonymous";
+
+  const entry = {
+    username,
+    rating,
+    bugs,
+    suggestions,
+    likes,
+    createdAt: Date.now(),
+  };
+
+  if (mongoEnabled && mongoFeedback) {
+    try {
+      await mongoFeedback.insertOne(entry);
+    } catch (err) {
+      console.error("[FEEDBACK] Submit error:", err.message);
+    }
+  } else {
+    feedbackData.push(entry);
+    saveFeedbackFile();
+  }
+  console.log(`[FEEDBACK] ${username} - ${rating}* - bugs: ${bugs.slice(0, 30)} - suggestions: ${suggestions.slice(0, 30)}`);
+  res.json({ ok: true });
+});
+
+// Admin endpoint - prehled vseho feedbacku
+app.post("/api/feedback/list", async (req, res) => {
+  const session = requireAuth(req, res);
+  if (!session) return;
+  const user = users[session.username];
+  if (!user || !user.isAdmin) {
+    res.status(403).json({ ok: false, error: "Admin only" });
+    return;
+  }
+
+  let all = [];
+  if (mongoEnabled && mongoFeedback) {
+    try {
+      const docs = await mongoFeedback.find({}).sort({ createdAt: -1 }).limit(100).toArray();
+      all = docs.map((d) => {
+        const { _id, ...rest } = d;
+        return rest;
+      });
+    } catch (err) {
+      console.error("[FEEDBACK] List error:", err.message);
+    }
+  } else {
+    all = feedbackData.slice().reverse().slice(0, 100);
+  }
+
+  // Statistiky
+  const totalCount = all.length;
+  const avgRating = totalCount > 0
+    ? (all.reduce((sum, f) => sum + f.rating, 0) / totalCount).toFixed(2)
+    : 0;
+
+  res.json({ ok: true, items: all, totalCount, avgRating });
+});
+
+// Zjisti zda uzivatel uz poslal feedback (aby se neopakoval formular)
+app.post("/api/feedback/check", async (req, res) => {
+  const session = requireAuth(req, res);
+  if (!session) {
+    res.json({ ok: true, submitted: false });
+    return;
+  }
+
+  let count = 0;
+  if (mongoEnabled && mongoFeedback) {
+    try {
+      count = await mongoFeedback.countDocuments({ username: session.username });
+    } catch (err) {}
+  } else {
+    count = feedbackData.filter((f) => f.username === session.username).length;
+  }
+  res.json({ ok: true, submitted: count > 0, count });
 });
 
 // Posli friend request

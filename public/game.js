@@ -468,6 +468,112 @@
     sortSelect.onchange = refreshLeaderboard;
   }
 
+  // ---------- FEEDBACK MODAL ----------
+  const feedbackBtn = document.getElementById("btn-open-feedback");
+  const feedbackModal = document.getElementById("feedback-modal");
+  const feedbackCloseBtn = document.getElementById("btn-close-feedback");
+  const feedbackSubmitBtn = document.getElementById("btn-submit-feedback");
+  const ratingStars = document.querySelectorAll("#feedback-rating .star");
+  const ratingText = document.getElementById("feedback-rating-text");
+  let selectedRating = 0;
+
+  const ratingLabels = {
+    1: "Terrible 😞",
+    2: "Bad 😕",
+    3: "OK 😐",
+    4: "Good 😊",
+    5: "Amazing! 🤩",
+  };
+
+  function updateStars(rating) {
+    ratingStars.forEach((s) => {
+      const r = parseInt(s.getAttribute("data-rating"));
+      s.classList.toggle("active", r <= rating);
+    });
+    ratingText.textContent = ratingLabels[rating] || "";
+  }
+
+  ratingStars.forEach((star) => {
+    star.addEventListener("mouseenter", () => {
+      const r = parseInt(star.getAttribute("data-rating"));
+      ratingStars.forEach((s) => {
+        const sr = parseInt(s.getAttribute("data-rating"));
+        s.classList.toggle("hover", sr <= r);
+      });
+    });
+    star.addEventListener("mouseleave", () => {
+      ratingStars.forEach((s) => s.classList.remove("hover"));
+    });
+    star.addEventListener("click", () => {
+      selectedRating = parseInt(star.getAttribute("data-rating"));
+      updateStars(selectedRating);
+    });
+  });
+
+  function openFeedbackModal() {
+    feedbackModal.classList.add("active");
+    // Reset
+    selectedRating = 0;
+    updateStars(0);
+    document.getElementById("feedback-likes").value = "";
+    document.getElementById("feedback-bugs").value = "";
+    document.getElementById("feedback-suggestions").value = "";
+    document.getElementById("feedback-error").style.display = "none";
+    document.getElementById("feedback-success").style.display = "none";
+    feedbackSubmitBtn.parentElement.style.display = "flex";
+  }
+  function closeFeedbackModal() {
+    feedbackModal.classList.remove("active");
+  }
+
+  if (feedbackBtn) feedbackBtn.onclick = openFeedbackModal;
+  if (feedbackCloseBtn) feedbackCloseBtn.onclick = closeFeedbackModal;
+  feedbackModal.addEventListener("click", (e) => {
+    if (e.target === feedbackModal) closeFeedbackModal();
+  });
+
+  feedbackSubmitBtn.onclick = async () => {
+    if (selectedRating < 1 || selectedRating > 5) {
+      const errEl = document.getElementById("feedback-error");
+      errEl.textContent = "Please select a rating (1-5 stars)";
+      errEl.style.display = "block";
+      return;
+    }
+    const body = {
+      rating: selectedRating,
+      likes: document.getElementById("feedback-likes").value.trim(),
+      bugs: document.getElementById("feedback-bugs").value.trim(),
+      suggestions: document.getElementById("feedback-suggestions").value.trim(),
+      token: sessionToken || null,
+    };
+    feedbackSubmitBtn.disabled = true;
+    try {
+      const r = await fetch("/api/feedback/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await r.json();
+      if (data.ok) {
+        // Schovej formular, ukaz success
+        feedbackSubmitBtn.parentElement.style.display = "none";
+        document.getElementById("feedback-success").style.display = "block";
+        // Auto-close po 2.5s
+        setTimeout(closeFeedbackModal, 2500);
+      } else {
+        const errEl = document.getElementById("feedback-error");
+        errEl.textContent = data.error || "Failed to submit";
+        errEl.style.display = "block";
+      }
+    } catch (err) {
+      const errEl = document.getElementById("feedback-error");
+      errEl.textContent = "Network error";
+      errEl.style.display = "block";
+    } finally {
+      feedbackSubmitBtn.disabled = false;
+    }
+  };
+
   // Initial refresh + auto-refresh kazdych 30s
   refreshStats();
   setInterval(() => {
