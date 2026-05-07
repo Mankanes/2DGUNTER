@@ -2337,7 +2337,7 @@
       e.preventDefault();
       toggleFullscreen();
       // Aktualizuj ikonku
-      mbtnFullscreen.textContent = isFullscreenActive() ? "FS" : "FS";
+      mbtnFullscreen.textContent = isFullscreenActive() ? "⛶" : "⛶";
     };
     mbtnFullscreen.addEventListener("click", fsHandler);
     mbtnFullscreen.addEventListener("touchend", fsHandler, { passive: false });
