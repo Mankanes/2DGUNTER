@@ -2019,10 +2019,10 @@ io.on("connection", (socket) => {
         // Pokud je prihlaseny, ulozit do users.json (perzistentni)
         if (socket.data.username) {
           promoteToAdmin(socket.data.username, password);
-          sendConsole(socket, "✓ Admin status ulozen do uctu " + socket.data.username, "ok");
+          sendConsole(socket, "[OK] Admin status ulozen do uctu " + socket.data.username, "ok");
         } else {
           // Nepritlaseny - jen per-socket admin (ztrati se po reconnect)
-          sendConsole(socket, "✓ Admin status povolen (jen pro tuto session, prihlas se pro perzistenci)", "ok");
+          sendConsole(socket, "[OK] Admin status povolen (jen pro tuto session, prihlas se pro perzistenci)", "ok");
         }
         // Posli klientovi update statusu (aby se UI aktualizovalo bez reloglu)
         socket.emit("user_status_update", {
@@ -2041,7 +2041,7 @@ io.on("connection", (socket) => {
               id: "system",
               name: "SYSTEM",
               color: "#ffd700",
-              text: `👑 ${me.name} se stal adminem`,
+              text: `[ADMIN] ${me.name} se stal adminem`,
               time: Date.now(),
             });
             io.to(roomId).emit("room_info", roomInfo(room));
@@ -2051,9 +2051,9 @@ io.on("connection", (socket) => {
         socket.data.isTester = true;
         if (socket.data.username) {
           promoteToTester(socket.data.username, password);
-          sendConsole(socket, "✓ Tester status ulozen do uctu " + socket.data.username, "ok");
+          sendConsole(socket, "[OK] Tester status ulozen do uctu " + socket.data.username, "ok");
         } else {
-          sendConsole(socket, "✓ Tester status povolen (jen pro tuto session, prihlas se pro perzistenci)", "ok");
+          sendConsole(socket, "[OK] Tester status povolen (jen pro tuto session, prihlas se pro perzistenci)", "ok");
         }
         socket.emit("user_status_update", {
           username: socket.data.username,
@@ -2071,14 +2071,14 @@ io.on("connection", (socket) => {
               id: "system",
               name: "SYSTEM",
               color: "#54e0ff",
-              text: `🧪 ${me.name} se stal testerem`,
+              text: `[TESTER] ${me.name} se stal testerem`,
               time: Date.now(),
             });
             io.to(roomId).emit("room_info", roomInfo(room));
           }
         }
       } else {
-        sendConsole(socket, "✗ Nespravne heslo", "error");
+        sendConsole(socket, "[FAIL] Nespravne heslo", "error");
       }
       return;
     }
@@ -2127,7 +2127,7 @@ io.on("connection", (socket) => {
 
     // Admin check pro vsechny ostatni prikazy
     if (!me.isAdmin) {
-      sendConsole(socket, "✗ Permission denied. Pouze admin muze pouzivat konzoli.", "error");
+      sendConsole(socket, "[FAIL] Permission denied. Pouze admin muze pouzivat konzoli.", "error");
       sendConsole(socket, "  Pro prihlaseni napis: /login <heslo>", "info");
       return;
     }
@@ -2322,14 +2322,14 @@ io.on("connection", (socket) => {
           id: "system",
           name: "SYSTEM",
           color: "#ffd700",
-          text: `✓ Admin status povolen pro ${player.name}`,
+          text: `[OK] Admin status povolen pro ${player.name}`,
           time: now,
         });
         io.to(roomId).emit("chat", {
           id: "system",
           name: "SYSTEM",
           color: "#ffd700",
-          text: `👑 ${player.name} se stal adminem`,
+          text: `[ADMIN] ${player.name} se stal adminem`,
           time: now,
         });
         io.to(roomId).emit("room_info", roomInfo(room));
@@ -2348,14 +2348,14 @@ io.on("connection", (socket) => {
           id: "system",
           name: "SYSTEM",
           color: "#54e0ff",
-          text: `✓ Tester status povolen pro ${player.name}`,
+          text: `[OK] Tester status povolen pro ${player.name}`,
           time: now,
         });
         io.to(roomId).emit("chat", {
           id: "system",
           name: "SYSTEM",
           color: "#54e0ff",
-          text: `🧪 ${player.name} se stal testerem`,
+          text: `[TESTER] ${player.name} se stal testerem`,
           time: now,
         });
         io.to(roomId).emit("room_info", roomInfo(room));
@@ -2364,7 +2364,7 @@ io.on("connection", (socket) => {
           id: "system",
           name: "SYSTEM",
           color: "#ff5e3d",
-          text: "✗ Nespravne heslo",
+          text: "[FAIL] Nespravne heslo",
           time: now,
         });
       }

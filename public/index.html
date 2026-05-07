@@ -4,14 +4,17 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="KnockFriend" />
 <meta name="mobile-web-app-capable" content="yes" />
+<meta name="theme-color" content="#0f1424" />
 <title>KNOCKFRIEND</title>
 <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <!-- Doporuceni otocit telefon na sirku (zobrazi se jen kdyz je telefon na vysku ve hre) -->
   <div id="rotate-hint" class="rotate-hint">
-    <div class="rotate-icon">📱➜📱</div>
+    <div class="rotate-icon">[ROTATE]</div>
     <h2>Otoč telefon na šířku</h2>
     <p>Hra se hraje líp v landscape režimu</p>
     <button id="rotate-dismiss" class="btn">Pokračovat na výšku</button>
@@ -25,7 +28,7 @@
         <div class="logo">
           <span class="logo-text">KNOCKFRIEND</span>
         </div>
-        <div class="tagline">Multiplayer game with friends · 2-8 players</div>
+        <div class="tagline">Multiplayer game with friends — 2-8 players</div>
       </div>
 
       <div class="menu-card auth-card">
@@ -67,7 +70,7 @@
 
       <!-- Copyright -->
       <div class="menu-copyright">
-        © 2026 KuncarCorp · All rights reserved
+        Copyright 2026 KuncarCorp. All rights reserved.
       </div>
     </div>
 
@@ -79,7 +82,7 @@
         <div class="logo">
           <span class="logo-text">KNOCKFRIEND</span>
         </div>
-        <div class="tagline">Multiplayer game with friends · 2-8 players</div>
+        <div class="tagline">Multiplayer game with friends — 2-8 players</div>
         <div class="online-stats">
           <span class="stat-dot"></span>
           <span id="online-count">— players online</span>
@@ -242,17 +245,16 @@
 
       <!-- Copyright -->
       <div class="menu-copyright">
-        © 2026 KuncarCorp · All rights reserved
+        Copyright 2026 KuncarCorp. All rights reserved.
       </div>
     </div>
 
     <!-- Settings tlacitko - vzdy viditelne v rohu -->
-    <button id="btn-open-settings" class="btn-settings" title="Settings">⚙</button>
+    <button id="btn-open-settings" class="btn-settings" title="Settings">SETT</button>
 
     <!-- Feedback button - vpravo dole, vzdy viditelny -->
     <button id="btn-open-feedback" class="btn-feedback" title="Send feedback">
-      <span class="fb-icon">💬</span>
-      <span class="fb-label">Feedback</span>
+      <span class="fb-label">FEEDBACK</span>
     </button>
 
     <!-- Feedback modal -->
@@ -289,13 +291,13 @@
 
           <!-- Bugs -->
           <div class="feedback-section">
-            <label class="feedback-label">🐛 Found any bugs? <span class="feedback-optional">(optional)</span></label>
+            <label class="feedback-label">Found any bugs? <span class="feedback-optional">(optional)</span></label>
             <textarea id="feedback-bugs" placeholder="Describe what happened, on which device, etc..." maxlength="1000"></textarea>
           </div>
 
           <!-- Suggestions -->
           <div class="feedback-section">
-            <label class="feedback-label">💡 Ideas for improvement <span class="feedback-optional">(optional)</span></label>
+            <label class="feedback-label">Ideas for improvement <span class="feedback-optional">(optional)</span></label>
             <textarea id="feedback-suggestions" placeholder="New weapons, maps, features..." maxlength="1000"></textarea>
           </div>
 
@@ -308,7 +310,7 @@
           </div>
 
           <div id="feedback-success" class="feedback-success" style="display:none">
-            <div class="feedback-success-icon">✓</div>
+            <div class="feedback-success-icon">OK</div>
             <div>Thanks for your feedback!</div>
           </div>
         </div>
@@ -428,7 +430,7 @@
         <!-- Akcni tlacitka -->
         <div class="settings-actions">
           <button id="btn-back-to-lobby" class="btn">← Back to Lobby</button>
-          <button id="btn-exit-to-menu" class="btn danger">⏻ Exit to Menu</button>
+          <button id="btn-exit-to-menu" class="btn danger">EXIT</button>
         </div>
       </div>
     </div>
@@ -540,9 +542,9 @@
 
           <!-- Vrchni rohove tlacitka -->
           <div class="mobile-top-buttons">
-            <button class="mbtn-icon" id="mbtn-fullscreen" title="Fullscreen">⛶</button>
+            <button class="mbtn-icon" id="mbtn-fullscreen" title="Fullscreen">FS</button>
             <button class="mbtn-icon" id="mbtn-tab" title="Scoreboard">📊</button>
-            <button class="mbtn-icon" id="mbtn-chat" title="Chat">💬</button>
+            <button class="mbtn-icon" id="mbtn-chat" title="Chat">CHAT</button>
           </div>
 
           <!-- Minimapa - jen pro mobil (vyhoda) -->

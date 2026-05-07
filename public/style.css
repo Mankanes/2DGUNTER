@@ -2953,3 +2953,40 @@ body.has-touch .minimap {
     letter-spacing: 1px;
   }
 }
+
+/* ======================= iOS FULLSCREEN HACKS ======================= */
+/* iOS Safari neumi Fullscreen API. Tyto hacky maximalizuji viewport. */
+
+html, body {
+  /* dvh = dynamic viewport height - pocita s adress barou */
+  min-height: 100dvh;
+  /* Fallback pro starsi prohlizece */
+  min-height: -webkit-fill-available;
+}
+
+/* Hra na iPhone v "Add to Home Screen" mode bezi fullscreen */
+@media all and (display-mode: standalone) {
+  body {
+    /* Bezpecne odsazeni od notche */
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* Skryj scroll na iOS aby se neukazoval address bar pri scrolu */
+html {
+  overflow: hidden;
+  position: fixed;
+  width: 100%;
+  height: 100%;
+}
+body {
+  overflow: hidden;
+  width: 100vw;
+  width: 100dvw;
+  height: 100vh;
+  height: 100dvh;
+  position: fixed;
+  top: 0;
+  left: 0;
+}

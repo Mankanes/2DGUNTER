@@ -279,18 +279,18 @@
     row.className = "friend-row";
     const dotClass = "friend-status-dot" + (user.isOnline ? " online" : "");
     const nameClass = user.isAdmin ? " admin" : (user.isTester ? " tester" : "");
-    const namePrefix = user.isAdmin ? "👑 " : (user.isTester ? "🧪 " : "");
+    const namePrefix = user.isAdmin ? "[A] " : (user.isTester ? "[T] " : "");
 
     let actionsHtml = "";
     if (type === "friend") {
-      actionsHtml = `<button class="friend-btn remove" data-action="remove" data-user="${escapeHtml(user.username)}">×</button>`;
+      actionsHtml = `<button class="friend-btn remove" data-action="remove" data-user="${escapeHtml(user.username)}">REMOVE</button>`;
     } else if (type === "incoming") {
       actionsHtml = `
-        <button class="friend-btn accept" data-action="accept" data-user="${escapeHtml(user.username)}">✓</button>
-        <button class="friend-btn decline" data-action="remove" data-user="${escapeHtml(user.username)}">×</button>
+        <button class="friend-btn accept" data-action="accept" data-user="${escapeHtml(user.username)}">ACCEPT</button>
+        <button class="friend-btn decline" data-action="remove" data-user="${escapeHtml(user.username)}">DECLINE</button>
       `;
     } else if (type === "outgoing") {
-      actionsHtml = `<button class="friend-btn remove" data-action="remove" data-user="${escapeHtml(user.username)}">×</button>`;
+      actionsHtml = `<button class="friend-btn remove" data-action="remove" data-user="${escapeHtml(user.username)}">REMOVE</button>`;
     }
 
     row.innerHTML = `
@@ -341,7 +341,7 @@
           const row = document.createElement("div");
           row.className = "friend-row";
           const nameClass = u.isAdmin ? " admin" : (u.isTester ? " tester" : "");
-          const namePrefix = u.isAdmin ? "👑 " : (u.isTester ? "🧪 " : "");
+          const namePrefix = u.isAdmin ? "[A] " : (u.isTester ? "[T] " : "");
           row.innerHTML = `
             <div class="friend-status-dot"></div>
             <div class="friend-name${nameClass}">${namePrefix}${escapeHtml(u.username)}</div>
@@ -352,7 +352,7 @@
           row.querySelector("button").onclick = async () => {
             const result = await apiCall("/api/friends/request", { username: u.username });
             if (result.ok) {
-              row.querySelector(".friend-actions").innerHTML = '<span style="font-size:11px;color:#4ade80">Sent ✓</span>';
+              row.querySelector(".friend-actions").innerHTML = '<span style="font-size:11px;color:#4ade80">Sent</span>';
               setTimeout(() => {
                 searchInput.value = "";
                 searchResultsEl.innerHTML = "";
@@ -445,7 +445,7 @@
         const row = document.createElement("div");
         const isMe = currentUser && p.username === currentUser.username;
         row.className = `lb-row rank-${rank}${isMe ? " me" : ""}`;
-        const namePrefix = p.isAdmin ? "👑 " : (p.isTester ? "🧪 " : "");
+        const namePrefix = p.isAdmin ? "[A] " : (p.isTester ? "[T] " : "");
         const nameClass = p.isAdmin ? " admin" : (p.isTester ? " tester" : "");
         let statValue = "";
         if (sort === "wins") statValue = p.wins;
@@ -453,7 +453,7 @@
         else if (sort === "hours") statValue = formatHours(p.playTimeMs);
         else statValue = p.kills;
         row.innerHTML = `
-          <div class="lb-rank">${rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : "#" + rank}</div>
+          <div class="lb-rank">${"#" + rank}</div>
           <div class="lb-name${nameClass}" title="${escapeHtml(p.username)}">${namePrefix}${escapeHtml(p.username)}</div>
           <div class="lb-stat">${statValue}</div>
         `;
@@ -478,11 +478,11 @@
   let selectedRating = 0;
 
   const ratingLabels = {
-    1: "Terrible 😞",
-    2: "Bad 😕",
-    3: "OK 😐",
-    4: "Good 😊",
-    5: "Amazing! 🤩",
+    1: "Terrible",
+    2: "Bad",
+    3: "OK",
+    4: "Good",
+    5: "Amazing!",
   };
 
   function updateStars(rating) {
@@ -1320,8 +1320,8 @@
     for (const p of info.players) {
       const row = document.createElement("div");
       row.className = "lobby-player" + (p.ready ? " ready" : "") + (p.isAdmin ? " admin" : "") + (p.isTester ? " tester" : "");
-      const adminBadge = p.isAdmin ? '<span class="admin-badge">👑</span> ' : '';
-      const testerBadge = p.isTester && !p.isAdmin ? '<span class="tester-badge">🧪 TESTER</span> ' : '';
+      const adminBadge = p.isAdmin ? '<span class="admin-badge">ADMIN</span> ' : '';
+      const testerBadge = p.isTester && !p.isAdmin ? '<span class="tester-badge">TESTER</span> ' : '';
       const hostBadge = p.id === info.hostId ? '<span class="player-host-badge">HOST</span>' : '';
       const nameStyle = p.isAdmin ? 'color: #ffd700' : (p.isTester ? 'color: #54e0ff' : '');
       row.innerHTML = `
@@ -1826,7 +1826,7 @@
   });
 
   function appendChatMessage(msg) {
-    const adminBadge = msg.isAdmin ? '<span class="chat-admin">👑</span> ' : (msg.isTester ? '<span class="chat-tester">🧪</span> ' : '');
+    const adminBadge = msg.isAdmin ? '<span class="chat-admin">[A]</span> ' : (msg.isTester ? '<span class="chat-tester">[T]</span> ' : '');
     const nameColor = msg.isAdmin ? "#ffd700" : (msg.isTester ? "#54e0ff" : msg.color);
 
     // Lobby log
@@ -2249,7 +2249,19 @@
               document.mozFullScreenElement ||
               document.msFullscreenElement);
   }
+  // Detekce iOS (Safari/Chrome na iOS - vsechny pouzivaji WebKit a NEPODPORUJI Fullscreen API)
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+                (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  // Standalone mode = uz pridano na home screen, hra bezi fullscreen
+  const isStandalone = window.matchMedia("(display-mode: standalone)").matches ||
+                       window.navigator.standalone === true;
+
   function requestFullscreen() {
+    // iOS - Fullscreen API neexistuje; ukaz instrukce na "Add to Home Screen"
+    if (isIOS && !isStandalone) {
+      showIOSFullscreenHelp();
+      return;
+    }
     const el = document.documentElement;
     const req = el.requestFullscreen ||
                 el.webkitRequestFullscreen ||
@@ -2262,6 +2274,46 @@
       screen.orientation.lock("landscape").catch(() => {});
     }
   }
+
+  function showIOSFullscreenHelp() {
+    // Vytvor modal pokud neexistuje
+    let m = document.getElementById("ios-fs-modal");
+    if (!m) {
+      m = document.createElement("div");
+      m.id = "ios-fs-modal";
+      m.className = "modal-overlay";
+      m.innerHTML = `
+        <div class="modal-card" style="max-width:420px">
+          <div class="modal-header">
+            <h2>FULLSCREEN ON iPHONE</h2>
+            <button class="btn-icon" id="ios-fs-close">X</button>
+          </div>
+          <div class="modal-body">
+            <p style="color:#94a3c4;font-size:13px;line-height:1.6">
+              Safari on iPhone does not allow fullscreen mode for websites.
+              To play in fullscreen, add KnockFriend to your Home Screen:
+            </p>
+            <ol style="color:#fff;font-size:13px;line-height:1.8;padding-left:20px">
+              <li>Tap the <b>Share</b> button at the bottom of Safari</li>
+              <li>Scroll down and tap <b>Add to Home Screen</b></li>
+              <li>Tap <b>Add</b></li>
+              <li>Open the new icon from your Home Screen — it will run fullscreen!</li>
+            </ol>
+            <p style="color:#5a6a90;font-size:11px;margin-top:14px">
+              Note: This works only in Safari, not Chrome/Firefox on iOS.
+            </p>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(m);
+      m.querySelector("#ios-fs-close").onclick = () => m.classList.remove("active");
+      m.addEventListener("click", (e) => {
+        if (e.target === m) m.classList.remove("active");
+      });
+    }
+    m.classList.add("active");
+  }
+
   function exitFullscreen() {
     const exit = document.exitFullscreen ||
                  document.webkitExitFullscreen ||
@@ -2280,7 +2332,7 @@
       e.preventDefault();
       toggleFullscreen();
       // Aktualizuj ikonku
-      mbtnFullscreen.textContent = isFullscreenActive() ? "⛶" : "⛶";
+      mbtnFullscreen.textContent = isFullscreenActive() ? "FS" : "FS";
     };
     mbtnFullscreen.addEventListener("click", fsHandler);
     mbtnFullscreen.addEventListener("touchend", fsHandler, { passive: false });
@@ -2925,8 +2977,8 @@
     ctx.fillStyle = "rgba(0,0,0,0.7)";
     ctx.fillRect(p.x + W / 2 - 55, p.y - 22, 110, 16);
     ctx.fillStyle = p.isAdmin ? "#ffd700" : (p.isTester ? "#54e0ff" : p.color);
-    const namePrefix = p.isAdmin ? "👑 " : (p.isTester ? "🧪 " : "");
-    ctx.fillText(namePrefix + p.name + (p.id === selfId ? " ★" : ""), p.x + W / 2, p.y - 10);
+    const namePrefix = p.isAdmin ? "[A] " : (p.isTester ? "[T] " : "");
+    ctx.fillText(namePrefix + p.name + (p.id === selfId ? " (YOU)" : ""), p.x + W / 2, p.y - 10);
     ctx.restore();
 
     const hpRatio = clamp(p.hp / SHARED.PLAYER.MAX_HEALTH, 0, 1);
@@ -3141,11 +3193,11 @@
     let html = `<div class="row header">
         <div></div><div>Player</div><div>W</div><div>K</div><div>D</div></div>`;
     for (const p of players) {
-      const adminBadge = p.isAdmin ? "👑 " : (p.isTester ? "🧪 " : "");
+      const adminBadge = p.isAdmin ? "[A] " : (p.isTester ? "[T] " : "");
       const nameColor = p.isAdmin ? 'color:#ffd700' : (p.isTester ? 'color:#54e0ff' : '');
       html += `<div class="row${p.alive ? "" : " dead"}">
         <div class="swatch" style="background:${p.color}"></div>
-        <div class="pname" style="${nameColor}">${adminBadge}${escapeHtml(p.name)}${p.id === selfId ? " ★" : ""}</div>
+        <div class="pname" style="${nameColor}">${adminBadge}${escapeHtml(p.name)}${p.id === selfId ? " (YOU)" : ""}</div>
         <div class="pscore">${p.score}</div>
         <div class="pkd">${p.kills}</div>
         <div class="pkd">${p.deaths}</div>
@@ -3239,7 +3291,7 @@
                         ping < 200 ? "tab-ping-mid" : "tab-ping-bad";
       const pingText = ping === 0 ? "—" : `${ping}ms`;
 
-      const adminBadge = p.isAdmin ? "👑 " : "";
+      const adminBadge = p.isAdmin ? "[A] " : "";
       const rowClasses = [
         p.alive ? "" : "dead",
         p.id === selfId ? "self" : "",
@@ -3247,7 +3299,7 @@
 
       html += `<tr class="${rowClasses}">
         <td><span class="tab-swatch" style="background:${p.color}"></span></td>
-        <td><span class="tab-name${p.isAdmin ? ' admin' : ''}">${adminBadge}${escapeHtml(p.name)}${p.id === selfId ? " ★" : ""}</span></td>
+        <td><span class="tab-name${p.isAdmin ? ' admin' : ''}">${adminBadge}${escapeHtml(p.name)}${p.id === selfId ? " (YOU)" : ""}</span></td>
         <td class="tab-wins">${p.score}</td>
         <td>${p.kills}</td>
         <td>${p.deaths}</td>
@@ -3267,7 +3319,7 @@
     row.className = "killfeed-row";
     if (killer) {
       row.innerHTML = `<span style="color:${killer.color}">${escapeHtml(killer.name)}</span>` +
-        ` 🔫 <span style="color:${victim?.color || "#fff"}">${escapeHtml(victim?.name || "?")}</span>` +
+        ` KILLED <span style="color:${victim?.color || "#fff"}">${escapeHtml(victim?.name || "?")}</span>` +
         ` <span style="opacity:0.7">[${ev.cause}]</span>`;
     } else {
       row.innerHTML = `<span style="color:${victim?.color || "#fff"}">${escapeHtml(victim?.name || "?")}</span> fell off the world`;
