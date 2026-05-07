@@ -422,6 +422,50 @@
     } else {
       mySection.style.display = "none";
     }
+
+    // Leaderboard
+    refreshLeaderboard();
+  }
+
+  async function refreshLeaderboard() {
+    const sortSelect = document.getElementById("leaderboard-sort");
+    const sort = sortSelect ? sortSelect.value : "kills";
+    try {
+      const r = await fetch(`/api/stats/leaderboard?sort=${sort}&limit=10`);
+      const data = await r.json();
+      if (!data.ok) return;
+      const listEl = document.getElementById("leaderboard-list");
+      listEl.innerHTML = "";
+      if (data.players.length === 0) {
+        listEl.innerHTML = '<div class="lb-empty">No players yet</div>';
+        return;
+      }
+      data.players.forEach((p, idx) => {
+        const rank = idx + 1;
+        const row = document.createElement("div");
+        const isMe = currentUser && p.username === currentUser.username;
+        row.className = `lb-row rank-${rank}${isMe ? " me" : ""}`;
+        const namePrefix = p.isAdmin ? "👑 " : (p.isTester ? "🧪 " : "");
+        const nameClass = p.isAdmin ? " admin" : (p.isTester ? " tester" : "");
+        let statValue = "";
+        if (sort === "wins") statValue = p.wins;
+        else if (sort === "games") statValue = p.gamesPlayed;
+        else if (sort === "hours") statValue = formatHours(p.playTimeMs);
+        else statValue = p.kills;
+        row.innerHTML = `
+          <div class="lb-rank">${rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : "#" + rank}</div>
+          <div class="lb-name${nameClass}" title="${escapeHtml(p.username)}">${namePrefix}${escapeHtml(p.username)}</div>
+          <div class="lb-stat">${statValue}</div>
+        `;
+        listEl.appendChild(row);
+      });
+    } catch (err) {}
+  }
+
+  // Sort change
+  const sortSelect = document.getElementById("leaderboard-sort");
+  if (sortSelect) {
+    sortSelect.onchange = refreshLeaderboard;
   }
 
   // Initial refresh + auto-refresh kazdych 30s
@@ -1581,7 +1625,7 @@
       executeConsoleCommand(consoleInput.value);
       consoleInput.value = "";
       consoleHistoryIdx = -1;
-    } else if (e.key === "Escape" || e.key === "`" || e.key === "~") {
+    } else if (e.key === "Escape" || actionForKey(e.key) === "console") {
       closeConsole();
       e.preventDefault();
     } else if (e.key === "ArrowUp") {

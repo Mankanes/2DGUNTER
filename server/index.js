@@ -1456,6 +1456,37 @@ app.get("/api/stats/global", (_req, res) => {
   });
 });
 
+// Leaderboard - top hraci serazeni podle killu
+app.get("/api/stats/leaderboard", (req, res) => {
+  const sortBy = (req.query?.sort || "kills").toString();
+  const limit = Math.min(parseInt(req.query?.limit) || 20, 100);
+
+  const list = [];
+  for (const [username, u] of Object.entries(users)) {
+    const s = u.stats || { gamesPlayed: 0, kills: 0, deaths: 0, wins: 0, playTimeMs: 0 };
+    list.push({
+      username,
+      isAdmin: !!u.isAdmin,
+      isTester: !!u.isTester,
+      gamesPlayed: s.gamesPlayed || 0,
+      kills: s.kills || 0,
+      deaths: s.deaths || 0,
+      wins: s.wins || 0,
+      playTimeMs: s.playTimeMs || 0,
+    });
+  }
+
+  // Sort podle vybraneho parametru
+  list.sort((a, b) => {
+    if (sortBy === "wins") return b.wins - a.wins;
+    if (sortBy === "games") return b.gamesPlayed - a.gamesPlayed;
+    if (sortBy === "hours") return b.playTimeMs - a.playTimeMs;
+    return b.kills - a.kills; // default
+  });
+
+  res.json({ ok: true, players: list.slice(0, limit) });
+});
+
 // Posli friend request
 app.post("/api/friends/request", async (req, res) => {
   const session = requireAuth(req, res);
